@@ -1,275 +1,250 @@
-# Simple Shot
+<p align="center">
+  <img src="assets/icon.png" width="128" height="128" alt="Simple Shot logo"/>
+</p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+<h1 align="center">Simple Shot</h1>
 
-A professional desktop application for capturing screen regions, annotating screenshots, and uploading them to SSH (SFTP), FTP, or Amazon S3. **Simple Shot** runs in the system tray and supports multiple displays, watermarks, blur regions, and 10 interface languages.
+<p align="center">
+  <strong>Professional screen capture with annotations and instant upload</strong>
+</p>
 
----
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"/></a>
+  <a href="https://www.electronjs.org/"><img src="https://img.shields.io/badge/Electron-39-47848F?logo=electron" alt="Electron"/></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-18+-339933?logo=node.js" alt="Node.js 18+"/></a>
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey" alt="Platform"/>
+</p>
 
-## Table of Contents
-
-- [Features](#features)
-- [Screenshots](#screenshots)
-- [Requirements](#requirements)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Configuration](#configuration)
-- [Internationalization](#internationalization)
-- [Project Structure](#project-structure)
-- [Building](#building)
-- [Building the Windows installer](#building-the-windows-installer)
-- [Contributing](#contributing)
-- [License](#license)
-
----
-
-## Features
-
-### Screen capture
-
-- **Multi-display support** — Overlay on each monitor; choose the screen and drag to select the capture area.
-- **Aspect-ratio crop** — Preset ratios (3:2, 2:3, 4:3, 3:4, 1:1, 16:9) or free selection.
-- **Resize & move** — Adjust the selection with handles; move the whole area by dragging.
-
-### Annotations (before save/upload)
-
-- **Shapes** — Rectangle and circle (outline or filled; right-click toggles).
-- **Text** — Single-line text with optional background (right-click toggles).
-- **Number labels** — Auto-incrementing numbers with optional background.
-- **Arrow** — Straight arrow from click to release.
-- **Brush** — Freehand drawing.
-- **Blur** — Rectangular blur area (e.g. for sensitive data); applied to the final image on save/upload.
-- **Move** — Select and drag any annotation to reposition.
-- **Undo** — Revert the last annotation.
-- **Format** — Configure text color, highlight color, font size, and stroke width for annotations.
-
-### Export & upload
-
-- **Save to file** — Save as PNG via system dialog; path is copied to clipboard.
-- **Upload to server** — Upload and get a URL; URL is copied to clipboard.
-- **Upload methods:**
-  - **SSH (SFTP)** — Host, port, username, password or private key, remote path.
-  - **FTP / FTPS** — Host, port, credentials, destination path, optional TLS.
-  - **Amazon S3** — Access key, secret, bucket, region, optional custom endpoint (S3-compatible storage).
-
-### Watermark
-
-- Optional text watermark on every saved/uploaded screenshot.
-- Configurable: text, position (corners/center), font size, color, opacity.
-- Stored in settings and applied during export.
-
-### Other
-
-- **Link history** — List of recent uploads and local saves (method, URL/path, date); click to copy.
-- **System tray** — Runs from the tray; left-click starts capture, right-click opens menu (Capture, Settings, History, Exit).
-- **Settings** — Stored in user data; base URL template for uploaded file links.
+<p align="center">
+  Capture regions, annotate, add watermarks — save locally or upload to <strong>SFTP</strong>, <strong>FTP</strong>, or <strong>S3</strong>.<br/>
+  Runs in the system tray. Multi-monitor, 10 languages.
+</p>
 
 ---
 
-## Screenshots
+## 📑 Table of Contents
 
-*After starting capture from the tray, overlay windows appear on each display. Drag to select a region; the toolbar offers crop, annotations, save to file, and upload to server.*
+- [Features](#-features)
+- [Screenshots](#-screenshots)
+- [Requirements](#-requirements)
+- [Quick Start](#-quick-start)
+- [Usage](#-usage)
+- [Configuration](#-configuration)
+- [Internationalization](#-internationalization)
+- [Project Structure](#-project-structure)
+- [Building](#-building)
+- [Windows Installer](#-windows-installer)
+- [Contributing](#-contributing)
+- [License](#-license)
 
 ---
 
-## Requirements
+## ✨ Features
 
-- **Node.js** 18+ (LTS recommended)
-- **npm** or **yarn**
-- **Windows / macOS / Linux** (Electron supported platforms)
+<table>
+<tr>
+<td width="50%">
+
+### 📸 Screen capture
+
+- **Multi-display** — Overlay on each monitor; pick a screen and drag to select
+- **Aspect-ratio crop** — 3:2, 2:3, 4:3, 3:4, 1:1, 16:9 or free
+- **Resize & move** — Handles and drag to adjust the selection
+
+### ✏️ Annotations
+
+- **Shapes** — Rectangle, circle (outline/filled; right-click toggles)
+- **Text & numbers** — With optional background
+- **Arrow** — Click to release
+- **Brush** — Freehand draw
+- **Blur** — Hide sensitive areas (applied on export)
+- **Move** — Drag any annotation; **Undo** last change
+- **Format** — Text color, highlight, font size, stroke
+
+</td>
+<td width="50%">
+
+### ☁️ Export & upload
+
+- **Save to file** — PNG via save dialog; path to clipboard
+- **Upload** — URL to clipboard
+- **SSH (SFTP)** — Host, port, user, password or key, path
+- **FTP / FTPS** — With optional TLS
+- **Amazon S3** — Bucket, region, optional custom endpoint
+
+### 🏷️ Watermark
+
+- Optional text on every export
+- Position, font size, color, opacity
+
+### 🔗 Other
+
+- **Link history** — Recent uploads/saves; click to copy
+- **System tray** — Left-click capture, right-click menu
+- **Settings** — Stored in user data
+
+</td>
+</tr>
+</table>
 
 ---
 
-## Installation
+## 📷 Screenshots
+
+| Capture overlay | Settings |
+|-----------------|----------|
+| *Overlay on each display; drag to select, toolbar for crop and annotations.* | *Language, save method (SSH/FTP/S3), base URL, watermark.* |
+
+> After starting capture from the tray, overlay windows appear on each display. Drag to select a region; use the toolbar to crop, annotate, then save to file or upload to server.
+
+---
+
+## 📋 Requirements
+
+| Requirement | Version |
+|-------------|---------|
+| **Node.js** | 18+ (LTS recommended) |
+| **Package manager** | npm or yarn |
+| **OS** | Windows, macOS, or Linux (Electron-supported) |
+
+---
+
+## 🚀 Quick Start
 
 ```bash
-# Clone the repository
 git clone https://github.com/prybytkow/simple-shot.git
 cd simple-shot
-
-# Install dependencies
 npm install
-
-# Build TypeScript
 npm run build
-```
-
----
-
-## Usage
-
-**Start the app**
-
-```bash
 npm start
 ```
 
-Or use the dev watcher (rebuilds on change):
+Or run in development mode (auto-rebuild on change):
 
 ```bash
 npm run dev
 ```
 
-**Workflow**
+---
 
-1. **Capture** — Click the tray icon (or choose “Capture Screen” from the tray menu). Overlay appears on each display.
-2. **Select area** — Click and drag on the desired screen to define the region. Resize with corner/edge handles if needed.
-3. **Optional** — Use the toolbar to crop by aspect ratio, add annotations (shapes, text, arrows, brush, blur), and change format.
-4. **Export** — Click “Save to file” (PNG to disk) or “Upload to server” (SSH/FTP/S3). The file path or URL is copied to the clipboard.
-5. **History** — Open “Link History” from the tray to see recent uploads/saves and copy URLs or paths.
+## 📖 Usage
 
-**Shortcuts**
+1. **Start** — Click the tray icon or choose *Capture* from the tray menu.
+2. **Select** — Click and drag on the desired screen to define the region; resize with handles if needed.
+3. **Annotate** (optional) — Use the toolbar: crop, shapes, text, arrows, brush, blur; set format.
+4. **Export** — *Save to file* (PNG, path to clipboard) or *Upload to server* (URL to clipboard).
+5. **History** — Tray → *Link History* to see recent uploads/saves and copy links.
 
-- **ESC** — Cancel capture and close overlay windows.
+| Shortcut | Action |
+|----------|--------|
+| **ESC** | Cancel capture and hide overlay |
 
 ---
 
-## Configuration
+## ⚙️ Configuration
 
-All settings are in **Settings** (tray → Settings). They are stored in the app’s user data directory (e.g. `%APPDATA%/simple-shot` on Windows).
+All settings: **Tray → Settings**. Stored in user data (e.g. `%APPDATA%\simple-shot` on Windows).
 
-### Save method
-
-- **SSH (SFTP)** — Host, port (default 22), username, password or private key path, destination path.
-- **FTP** — Host, port (default 21), username, password, destination path, optional “Secure connection (FTPS)”.
-- **Amazon S3** — Access Key ID, Secret Access Key, bucket, region (default `us-east-1`), optional endpoint for S3-compatible backends.
-
-### Base URL
-
-Base URL for uploaded files (e.g. `https://vault.by`). The uploaded path is appended to form the full link copied to the clipboard.
-
-### Watermark
-
-- Enable/disable.
-- Text, position (top-left, top-right, bottom-left, bottom-right, center), font size, color, opacity (0–1).
-
-### Language
-
-Choose interface language or “System default” (follows OS locale with fallback to English).
+| Section | Description |
+|---------|-------------|
+| **Save method** | SSH (SFTP), FTP, or Amazon S3 — host, credentials, paths |
+| **Base URL** | Prefix for uploaded file links (e.g. `https://vault.by`) |
+| **Watermark** | Enable, text, position, font size, color, opacity (0–1) |
+| **Language** | Interface language or *System default* |
 
 ---
 
-## Internationalization
+## 🌍 Internationalization
 
-The UI is translated for:
+| Code | Language | Code | Language |
+|------|----------|------|----------|
+| `en` | English | `it` | Italiano |
+| `ru` | Русский | `es` | Español |
+| `zh` | 中文 | `pt` | Português |
+| `pl` | Polski | `fr` | Français |
+| `uk` | Українська | — | — |
+| `be` | Беларуская | — | — |
 
-| Code | Language   |
-|------|------------|
-| `en` | English    |
-| `ru` | Русский    |
-| `zh` | 中文       |
-| `pl` | Polski     |
-| `uk` | Українська |
-| `be` | Беларуская |
-| `it` | Italiano   |
-| `es` | Español    |
-| `pt` | Português  |
-| `fr` | Français   |
-
-- Default language: **English**.
-- If “System default” is selected, the app uses the system locale when it matches one of the above; otherwise it falls back to English.
-- Language is saved in settings and applied to the tray menu, settings window, capture overlay, and history window.
+- Default: **English**. *System default* uses OS locale with fallback to English.
+- Language is saved and applied to tray, settings, capture overlay, and history.
 
 ---
 
-## Project Structure
+## 📁 Project Structure
 
-Source code and assets live in the repository; the `dist/` folder is generated by the build and is not committed.
+Source and assets are in the repo; `dist/` is generated by the build (gitignored).
 
 ```
 simple-shot/
-├── src/
-│   └── main/
-│       ├── main.ts           # App entry, tray, windows, IPC
-│       ├── screen-capture.ts # Capture flow, watermark/compose, save/upload
-│       ├── i18n.ts           # Translations and language resolution
-│       ├── history.ts        # Local history of uploads/saves
-│       ├── tray.ts
-│       ├── ssh-handler.ts    # SSH/SFTP setup
-│       └── uploaders/
-│           ├── ssh-uploader.ts
-│           ├── ftp-uploader.ts
-│           └── s3-uploader.ts
-├── renderer/                 # Renderer HTML (copied to dist/renderer on build)
-│   ├── capture-window.html   # Capture overlay + annotations
-│   ├── settings.html         # Settings form
-│   └── history.html         # Link history list
-├── assets/                   # App icons (copied to dist/main/assets on build)
-│   ├── icon.png              # Tray icon
-│   ├── icon.ico              # Windows app/installer icon
-│   └── README.md
+├── src/main/              # Main process (TypeScript)
+│   ├── main.ts            # Entry, tray, windows, IPC
+│   ├── screen-capture.ts  # Capture, watermark, save/upload
+│   ├── i18n.ts            # Translations
+│   ├── history.ts         # Upload/save history
+│   ├── ssh-handler.ts     # SSH/SFTP
+│   └── uploaders/         # SSH, FTP, S3 uploaders
+├── renderer/              # HTML UIs → dist/renderer
+│   ├── capture-window.html
+│   ├── settings.html
+│   └── history.html
+├── assets/                # Icons → dist/main/assets
+│   ├── icon.png
+│   └── icon.ico
 ├── scripts/
-│   └── copy-build-assets.js # Copies renderer + assets → dist
-├── dist/                     # Generated by build (gitignored)
-│   ├── main/                 # Compiled JS + assets
-│   └── renderer/             # HTML from renderer/
+│   └── copy-build-assets.js
 ├── package.json
 ├── tsconfig.json
-├── README.md
 └── LICENSE
 ```
 
 ---
 
-## Building
+## 🔨 Building
 
-```bash
-# One-off build
-npm run build
+| Command | Description |
+|---------|-------------|
+| `npm run build` | Compile TypeScript, copy renderer + assets to `dist/` |
+| `npm start` | Build (if needed) and run the app |
+| `npm run dev` | Watch mode: rebuild and restart on change |
 
-# Run app (builds if needed)
-npm start
-
-# Development with auto-rebuild
-npm run dev
-```
-
-The main process is TypeScript (`src/main/*.ts`) and compiles to `dist/main/`. The build also copies `renderer/*.html` to `dist/renderer/` and `assets/*` to `dist/main/assets/` (see `scripts/copy-build-assets.js`). Ensure `dist/main/main.js` exists before running (e.g. after `npm run build`).
+Build output: `dist/main/` (JS + assets), `dist/renderer/` (HTML).
 
 ---
 
-## Building the Windows installer
+## 📦 Windows Installer
 
-To build an installable Windows application (`.exe` installer and unpacked app), use [electron-builder](https://www.electron.build/). Builds must be run on **Windows**.
-
-**Prerequisites**
-
-- Windows (required for creating the Windows installer)
-- Dependencies installed: `npm install` (includes `electron-builder`)
-
-**Build steps**
+Build an installable Windows app (NSIS `.exe` and portable) with [electron-builder](https://www.electron.build/). Run on **Windows**.
 
 ```bash
-# 1. Install dependencies (if not already done)
 npm install
-
-# 2. Build the installer and portable app
 npm run dist
 ```
 
-This runs `npm run build` (compiles TypeScript) and then `electron-builder --win`. Output is written to the **`release/`** folder:
+Output in **`release/`**:
 
-| File / folder | Description |
-|---------------|-------------|
-| **Simple Shot Setup 1.0.0.exe** | NSIS installer — run to install the app (choose installation directory, add Start Menu and optional desktop shortcut). |
-| **win-unpacked/** | Unpacked application — run `Simple Shot.exe` inside this folder for a portable run without installing. |
+| Output | Description |
+|--------|-------------|
+| **Simple Shot Setup 1.0.0.exe** | NSIS installer — choose directory, Start Menu, desktop shortcut |
+| **win-unpacked/** | Portable — run `Simple Shot.exe` without installing |
 
-**Icons**
+**Icons:** Put `icon.png` and `icon.ico` in `assets/`. They are copied to `dist/main/assets/` on build. Use a multi-size `.ico` (16×16, 32×32, 48×48, 256×256) for best results.
 
-Place `icon.png` (tray) and `icon.ico` (Windows app/installer) in the **`assets/`** folder in the project root. The build copies them to `dist/main/assets/`. If you only have a PNG, create a multi-size `.ico` (e.g. 16×16, 32×32, 48×48, 256×256) for the installer.
-
-**Icon not updating after rebuild?** Do a clean build: remove the `release/` and `dist/` folders, then run `npm run dist`. Windows caches icons: if the exe/taskbar still shows the old icon, clear the cache (e.g. delete `%LocalAppData%\IconCache.db`, then restart Explorer or reboot).
+**Icon not updating?** Clean build: delete `release/` and `dist/`, then `npm run dist`. Clear Windows icon cache (`%LocalAppData%\IconCache.db`, restart Explorer) if needed.
 
 ---
 
-## Contributing
+## 🤝 Contributing
 
-Contributions are welcome. Please open an issue first to discuss larger changes, and ensure the project builds and runs with `npm run build` and `npm start`.
+Contributions are welcome. For larger changes, open an issue first. Ensure the project builds and runs:
+
+```bash
+npm run build && npm start
+```
 
 ---
 
-## License
+## 📄 License
 
-This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for the full text.
+This project is licensed under the **MIT License** — see [LICENSE](LICENSE) for the full text.
 
-Copyright © 2025 Aliaksei Prybytkou
+**Copyright © 2025 Aliaksei Prybytkou**
