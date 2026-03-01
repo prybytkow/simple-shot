@@ -1,0 +1,56 @@
+{
+  "name": "simple-shot",
+  "version": "1.0.0",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "build": "tsc && node scripts/copy-build-assets.js",
+    "start": "npm run build && electron .",
+    "dev": "tsc-watch --onSuccess \"node scripts/copy-build-assets.js && electron .\"",
+    "dist": "npm run build && electron-builder --win"
+  },
+  "build": {
+    "appId": "com.simple-shot.app",
+    "productName": "Simple Shot",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "dist/main/assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "dist/main/assets/icon.ico",
+      "uninstallerIcon": "dist/main/assets/icon.ico"
+    }
+  },
+  "devDependencies": {
+    "@types/ssh2-sftp-client": "^9.0.5",
+    "electron": "^39.2.3",
+    "electron-builder": "^26.8.1",
+    "tsc-watch": "^6.0.0",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.893.0",
+    "@aws-sdk/s3-request-presigner": "^3.893.0",
+    "@types/node": "^20.0.0",
+    "basic-ftp": "^5.0.5",
+    "ssh2-sftp-client": "^12.0.1"
+  },
+  "author": "Aliaksei Prybytkou",
+  "license": "MIT",
+  "description": "Simple Shot — screen capture and upload"
+}

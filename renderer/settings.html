@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Settings</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 550px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+        
+        .method-section {
+            display: none;
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #3498db;
+        }
+        
+        .method-section.active {
+            display: block;
+        }
+        
+        .buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+        
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+        
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #7f8c8d;
+        }
+        
+        .section-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin: 20px 0 10px 0;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #ecf0f1;
+        }
+        
+        .row {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .row .form-group {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 data-i18n="settings_saveTitle">Save Settings</h1>
+        
+        <div class="form-group">
+            <label for="language" data-i18n="settings_language">Language</label>
+            <select id="language">
+                <option value="system" data-i18n="settings_systemLanguage">System default</option>
+                <option value="en">English</option>
+                <option value="ru">Русский</option>
+                <option value="zh">中文</option>
+                <option value="pl">Polski</option>
+                <option value="uk">Українська</option>
+                <option value="be">Беларуская</option>
+                <option value="it">Italiano</option>
+                <option value="es">Español</option>
+                <option value="pt">Português</option>
+                <option value="fr">Français</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="saveMethod" data-i18n="settings_saveMethod">Save method:</label>
+            <select id="saveMethod">
+                <option value="ssh">SSH (SFTP)</option>
+                <option value="ftp">FTP</option>
+                <option value="s3">Amazon S3</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="baseUrl" data-i18n="settings_baseUrl">Base URL:</label>
+            <input type="text" id="baseUrl" placeholder="https://vault.by">
+        </div>
+
+        <!-- SSH Settings -->
+        <div id="ssh-section" class="method-section">
+            <div class="section-title" data-i18n="settings_sshTitle">SSH Settings</div>
+            
+            <div class="row">
+                <div class="form-group">
+                    <label for="ssh-host" data-i18n="settings_host">Host:</label>
+                    <input type="text" id="ssh-host" placeholder="example.com">
+                </div>
+                <div class="form-group">
+                    <label for="ssh-port" data-i18n="settings_port">Port:</label>
+                    <input type="number" id="ssh-port" value="22">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="form-group">
+                    <label for="ssh-username" data-i18n="settings_username">Username:</label>
+                    <input type="text" id="ssh-username" placeholder="username">
+                </div>
+                <div class="form-group">
+                    <label for="ssh-password" data-i18n="settings_password">Password:</label>
+                    <input type="password" id="ssh-password" placeholder="Пароль">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="ssh-privateKey" data-i18n="settings_privateKeyPath">Private key path:</label>
+                <input type="text" id="ssh-privateKey" placeholder="/path/to/private/key">
+            </div>
+            
+            <div class="form-group">
+                <label for="ssh-destination" data-i18n="settings_destinationPath">Destination path:</label>
+                <input type="text" id="ssh-destination" placeholder="/home/user/uploads" value="/uploads">
+            </div>
+        </div>
+
+        <!-- FTP Settings -->
+        <div id="ftp-section" class="method-section">
+            <div class="section-title" data-i18n="settings_ftpTitle">FTP Settings</div>
+            
+            <div class="row">
+                <div class="form-group">
+                    <label for="ftp-host" data-i18n="settings_host">Host:</label>
+                    <input type="text" id="ftp-host" placeholder="ftp.example.com">
+                </div>
+                <div class="form-group">
+                    <label for="ftp-port" data-i18n="settings_port">Port:</label>
+                    <input type="number" id="ftp-port" value="21">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="form-group">
+                    <label for="ftp-username" data-i18n="settings_username">Username:</label>
+                    <input type="text" id="ftp-username" placeholder="username">
+                </div>
+                <div class="form-group">
+                    <label for="ftp-password" data-i18n="settings_password">Password:</label>
+                    <input type="password" id="ftp-password" placeholder="Пароль">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="ftp-destination" data-i18n="settings_destinationPath">Destination path:</label>
+                <input type="text" id="ftp-destination" placeholder="/uploads" value="/uploads">
+            </div>
+            
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="ftp-secure"> <span data-i18n="settings_secureFtp">Secure connection (FTPS)</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- S3 Settings -->
+        <div id="s3-section" class="method-section">
+            <div class="section-title" data-i18n="settings_s3Title">Amazon S3 Settings</div>
+            
+            <div class="form-group">
+                <label for="s3-accessKey" data-i18n="settings_accessKeyId">Access Key ID:</label>
+                <input type="text" id="s3-accessKey" placeholder="AKIAIOSFODNN7EXAMPLE">
+            </div>
+            
+            <div class="form-group">
+                <label for="s3-secretKey" data-i18n="settings_secretKey">Secret Access Key:</label>
+                <input type="password" id="s3-secretKey" placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY">
+            </div>
+            
+            <div class="row">
+                <div class="form-group">
+                    <label for="s3-bucket" data-i18n="settings_bucket">Bucket:</label>
+                    <input type="text" id="s3-bucket" placeholder="my-bucket">
+                </div>
+                <div class="form-group">
+                    <label for="s3-region" data-i18n="settings_region">Region:</label>
+                    <input type="text" id="s3-region" placeholder="us-east-1" value="us-east-1">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="s3-endpoint" data-i18n="settings_endpointOptional">Endpoint (optional):</label>
+                <input type="text" id="s3-endpoint" placeholder="https://s3.us-east-1.amazonaws.com">
+            </div>
+        </div>
+
+        <div class="section-title" data-i18n="settings_watermarkTitle">Watermark</div>
+        <div class="form-group">
+            <label>
+                <input type="checkbox" id="watermark-enabled"> <span data-i18n="settings_watermarkEnabled">Enable watermark on saved screenshots</span>
+            </label>
+        </div>
+        <div class="form-group">
+            <label for="watermark-text" data-i18n="settings_watermarkText">Watermark text:</label>
+            <input type="text" id="watermark-text" placeholder="e.g. Confidential">
+        </div>
+        <div class="form-group">
+            <label for="watermark-position" data-i18n="settings_position">Position:</label>
+            <select id="watermark-position">
+                <option value="top-left" data-i18n="settings_topLeft">Top left</option>
+                <option value="top-right" data-i18n="settings_topRight">Top right</option>
+                <option value="bottom-left" data-i18n="settings_bottomLeft">Bottom left</option>
+                <option value="bottom-right" data-i18n="settings_bottomRight">Bottom right</option>
+                <option value="center" data-i18n="settings_center">Center</option>
+            </select>
+        </div>
+        <div class="row">
+            <div class="form-group">
+                <label for="watermark-fontSize" data-i18n="settings_fontSizePx">Font size (px):</label>
+                <input type="number" id="watermark-fontSize" min="8" max="120" value="24">
+            </div>
+            <div class="form-group">
+                <label for="watermark-color" data-i18n="settings_color">Color:</label>
+                <input type="color" id="watermark-color" value="#ffffff" title="Color">
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="watermark-opacity" data-i18n="settings_opacity">Opacity (0–1):</label>
+            <input type="number" id="watermark-opacity" min="0" max="1" step="0.1" value="0.5" title="Watermark opacity">
+        </div>
+
+        <div class="buttons">
+            <button id="cancel-btn" class="btn-secondary" data-i18n="settings_cancel">Cancel</button>
+            <button id="save-btn" class="btn-primary" data-i18n="settings_save">Save</button>
+        </div>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        const saveMethodSelect = document.getElementById('saveMethod');
+        const sshSection = document.getElementById('ssh-section');
+        const ftpSection = document.getElementById('ftp-section');
+        const s3Section = document.getElementById('s3-section');
+        const saveBtn = document.getElementById('save-btn');
+        const cancelBtn = document.getElementById('cancel-btn');
+
+        function updateVisibleSection() {
+            const method = saveMethodSelect.value;
+            sshSection.classList.remove('active');
+            ftpSection.classList.remove('active');
+            s3Section.classList.remove('active');
+            if (method === 'ssh') sshSection.classList.add('active');
+            else if (method === 'ftp') ftpSection.classList.add('active');
+            else if (method === 's3') s3Section.classList.add('active');
+        }
+
+        async function loadSettings() {
+            try {
+                const settings = await ipcRenderer.invoke('get-settings');
+                populateForm(settings);
+                const t = await ipcRenderer.invoke('get-translations', settings.language || 'system');
+                applyTranslations(t);
+                if (document.title !== undefined) document.title = t.settings_title || document.title;
+            } catch (error) {
+                console.error('Error loading settings:', error);
+            }
+        }
+
+        function applyTranslations(t) {
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const k = el.getAttribute('data-i18n');
+                if (t && k && t[k]) el.textContent = t[k];
+            });
+        }
+
+        function populateForm(settings) {
+            const langSelect = document.getElementById('language');
+            if (langSelect) langSelect.value = (settings.language === undefined || settings.language === null) ? 'system' : settings.language;
+            saveMethodSelect.value = settings.saveMethod;
+            document.getElementById('baseUrl').value = settings.baseUrl || 'https://vault.by';
+
+            document.getElementById('ssh-host').value = settings.ssh.host || '';
+            document.getElementById('ssh-port').value = settings.ssh.port || 22;
+            document.getElementById('ssh-username').value = settings.ssh.username || '';
+            document.getElementById('ssh-password').value = settings.ssh.password || '';
+            document.getElementById('ssh-privateKey').value = settings.ssh.privateKeyPath || '';
+            document.getElementById('ssh-destination').value = settings.ssh.destinationPath || '/uploads';
+
+            document.getElementById('ftp-host').value = settings.ftp.host || '';
+            document.getElementById('ftp-port').value = settings.ftp.port || 21;
+            document.getElementById('ftp-username').value = settings.ftp.username || '';
+            document.getElementById('ftp-password').value = settings.ftp.password || '';
+            document.getElementById('ftp-destination').value = settings.ftp.destinationPath || '/uploads';
+            document.getElementById('ftp-secure').checked = settings.ftp.secure || false;
+
+            document.getElementById('s3-accessKey').value = settings.s3.accessKeyId || '';
+            document.getElementById('s3-secretKey').value = settings.s3.secretAccessKey || '';
+            document.getElementById('s3-bucket').value = settings.s3.bucket || '';
+            document.getElementById('s3-region').value = settings.s3.region || 'us-east-1';
+            document.getElementById('s3-endpoint').value = settings.s3.endpoint || '';
+
+            const w = settings.watermark || {};
+            document.getElementById('watermark-enabled').checked = w.enabled || false;
+            document.getElementById('watermark-text').value = w.text || '';
+            document.getElementById('watermark-position').value = w.position || 'bottom-right';
+            document.getElementById('watermark-fontSize').value = w.fontSize != null ? w.fontSize : 24;
+            document.getElementById('watermark-color').value = w.color || '#ffffff';
+            document.getElementById('watermark-opacity').value = w.opacity != null ? w.opacity : 0.5;
+
+            updateVisibleSection();
+        }
+
+        async function saveSettings() {
+            const settings = {
+                saveMethod: saveMethodSelect.value,
+                baseUrl: document.getElementById('baseUrl').value.trim() || 'https://vault.by',
+                language: (document.getElementById('language') || {}).value || 'system',
+                ssh: {
+                    host: document.getElementById('ssh-host').value,
+                    port: parseInt(document.getElementById('ssh-port').value) || 22,
+                    username: document.getElementById('ssh-username').value,
+                    password: document.getElementById('ssh-password').value,
+                    privateKeyPath: document.getElementById('ssh-privateKey').value,
+                    destinationPath: document.getElementById('ssh-destination').value
+                },
+                ftp: {
+                    host: document.getElementById('ftp-host').value,
+                    port: parseInt(document.getElementById('ftp-port').value) || 21,
+                    username: document.getElementById('ftp-username').value,
+                    password: document.getElementById('ftp-password').value,
+                    destinationPath: document.getElementById('ftp-destination').value,
+                    secure: document.getElementById('ftp-secure').checked
+                },
+                s3: {
+                    accessKeyId: document.getElementById('s3-accessKey').value,
+                    secretAccessKey: document.getElementById('s3-secretKey').value,
+                    bucket: document.getElementById('s3-bucket').value,
+                    region: document.getElementById('s3-region').value,
+                    endpoint: document.getElementById('s3-endpoint').value
+                },
+                watermark: {
+                    enabled: document.getElementById('watermark-enabled').checked,
+                    text: document.getElementById('watermark-text').value.trim(),
+                    position: document.getElementById('watermark-position').value,
+                    fontSize: parseInt(document.getElementById('watermark-fontSize').value) || 24,
+                    color: document.getElementById('watermark-color').value || '#ffffff',
+                    opacity: (() => { const v = parseFloat(document.getElementById('watermark-opacity').value); return Number.isFinite(v) ? v : 0.5; })()
+                }
+            };
+
+            try {
+                await ipcRenderer.invoke('save-settings', settings);
+                window.close();
+            } catch (error) {
+                console.error('Error saving settings:', error);
+                const t = await ipcRenderer.invoke('get-translations', 'en').catch(() => ({}));
+                alert(t.settings_errorSaving || 'Error saving settings');
+            }
+        }
+
+        saveMethodSelect.addEventListener('change', updateVisibleSection);
+        saveBtn.addEventListener('click', saveSettings);
+        cancelBtn.addEventListener('click', () => window.close());
+
+        document.addEventListener('DOMContentLoaded', loadSettings);
+    </script>
+</body>
+</html>
