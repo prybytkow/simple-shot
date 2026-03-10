@@ -121,10 +121,10 @@ export function setupScreenCapture(): void {
   
   // Создаем отдельное окно для каждого экрана
   displays.forEach((display, index) => {
-    // Получаем реальные размеры с учетом масштабирования [citation:6]
     const scaleFactor = display.scaleFactor;
-    const width = Math.floor(display.bounds.width / scaleFactor);
-    const height = Math.floor(display.bounds.height / scaleFactor);
+    // bounds в DIP (device-independent pixels) — размер окна задаём в DIP, без деления на scaleFactor
+    const width = display.bounds.width;
+    const height = display.bounds.height;
     
     
     const overlayWindow = new BrowserWindow({
@@ -137,17 +137,18 @@ export function setupScreenCapture(): void {
       alwaysOnTop: true,
       skipTaskbar: true,
       resizable: true,
-      simpleFullscreen: true,
       movable: true,
+      fullscreen: false,
       webPreferences: {
         nodeIntegration: true,
         contextIsolation: false
       }
     });
 
-    overlayWindow.maximize();
+    // Не вызываем maximize() — окно должно покрывать весь дисплей включая панель задач Windows
+    // overlayWindow.maximize();
 
-    // Сохраняем ID дисплея в объекте окна для последующего использования
+    // Сохраняем ID дисплея
     (overlayWindow as any).displayId = display.id;
 
 
@@ -169,12 +170,32 @@ export function setupScreenCapture(): void {
     console.log(`Display ${index}:`, {
       bounds: display.bounds,
       scaleFactor: display.scaleFactor,
-      calculatedSize: { width, height },
+      windowSize: { width, height },
       displayId: display.id
     });
 
     overlayWindow.setIgnoreMouseEvents(false);
     overlayWindows.push(overlayWindow);
+
+    // После загрузки страницы принудительно задаём границы окна и контента по полному экрану (bounds),
+    // чтобы на Windows окно точно покрывало панель задач (не work area)
+    const displayBounds = { ...display.bounds };
+    overlayWindow.webContents.once('did-finish-load', () => {
+      if (overlayWindow.isDestroyed()) return;
+      overlayWindow.setBounds(displayBounds);
+      overlayWindow.setContentBounds(displayBounds);
+      overlayWindow.setAlwaysOnTop(true);
+      if (typeof overlayWindow.moveTop === 'function') overlayWindow.moveTop();
+      // Повторно через 200 ms — Windows иногда применяет work area при первом показе
+      setTimeout(() => {
+        if (!overlayWindow.isDestroyed()) {
+          overlayWindow.setBounds(displayBounds);
+          overlayWindow.setContentBounds(displayBounds);
+          overlayWindow.setAlwaysOnTop(true);
+          if (typeof overlayWindow.moveTop === 'function') overlayWindow.moveTop();
+        }
+      }, 200);
+    });
 
     // Обработчик закрытия окна
     overlayWindow.on('closed', () => {
@@ -182,6 +203,14 @@ export function setupScreenCapture(): void {
         // Если закрыто активное окно, сбрасываем его
        if (activeWindow === overlayWindow) {
         activeWindow = null;
+      }
+    });
+
+    // При получении фокуса снова поднимаем окно поверх остальных (браузер и др.)
+    overlayWindow.on('focus', () => {
+      if (!overlayWindow.isDestroyed()) {
+        overlayWindow.setAlwaysOnTop(true);
+        if (typeof overlayWindow.moveTop === 'function') overlayWindow.moveTop();
       }
     });
 

@@ -32,9 +32,19 @@
         #selection-area {
             position: absolute;
             border: 2px dashed #fff;
+            box-shadow: 0 0 0 2px #000;
             background: transparent;
             pointer-events: auto;
             display: none;
+        }
+        
+        /* При захвате скриншота — скрыть границу и маркеры, чтобы они не попали в снимок */
+        body.capture-hide-ui #selection-area {
+            border: none;
+            box-shadow: none;
+        }
+        body.capture-hide-ui #selection-area .resize-handle {
+            display: none !important;
         }
         
         /* Маркеры для изменения размера */
@@ -60,15 +70,93 @@
         
         #toolbar {
             position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            border-radius: 0;
+            padding: 0;
+            display: none;
+            gap: 0;
+            z-index: 1000;
+            pointer-events: none;
+            box-shadow: none;
+        }
+        
+        #toolbar .toolbar-side {
+            position: absolute;
+            display: flex;
+            gap: 6px;
+            padding: 6px;
             background: #333;
             border-radius: 8px;
-            padding: 8px;
-            display: none;
-            gap: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            pointer-events: auto;
+        }
+        
+        #toolbar .toolbar-side.toolbar-top,
+        #toolbar .toolbar-side.toolbar-bottom {
+            flex-direction: row;
+        }
+        
+        #toolbar .toolbar-side.toolbar-left,
+        #toolbar .toolbar-side.toolbar-right {
+            flex-direction: column;
+        }
+        
+        #toolbar .toolbar-side.toolbar-side-wrap {
+            flex-wrap: wrap;
+        }
+        
+        #toolbar.toolbar-inside .toolbar-side {
+            box-shadow: 0 2px 14px rgba(0,0,0,0.4);
+        }
+        
+        #toolbar .toolbar-panel {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            background: transparent;
             z-index: 1000;
             pointer-events: auto;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-            flex-wrap: wrap;
+        }
+        
+        #toolbar .toolbar-panel .toolbar-drag-handle {
+            flex-shrink: 0;
+            position: relative;
+            width: 100%;
+        }
+        
+        #toolbar .toolbar-panel .toolbar-side {
+            position: relative;
+            flex-shrink: 0;
+        }
+        
+        #toolbar .toolbar-drag-handle {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 20px;
+            background: #444;
+            border-radius: 6px 6px 0 0;
+            cursor: move;
+            z-index: 1;
+            flex-shrink: 0;
+        }
+        
+        #toolbar .toolbar-drag-handle::after {
+            content: '';
+            display: block;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 40px;
+            height: 4px;
+            background: rgba(255,255,255,0.4);
+            border-radius: 2px;
         }
         
         .tool-btn {
@@ -158,6 +246,15 @@
         }
         #format-panel .format-row label { color: #ccc; font-size: 13px; min-width: 140px; }
         #format-panel input[type="color"] { width: 40px; height: 28px; border: none; border-radius: 4px; cursor: pointer; }
+        #format-panel .format-presets { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+        #format-panel .format-swatch {
+            width: 22px; height: 22px; border-radius: 4px; cursor: pointer; border: 2px solid transparent;
+            flex-shrink: 0; box-sizing: border-box;
+        }
+        #format-panel .format-swatch:hover { border-color: #fff; }
+        #format-panel .format-swatch.active { border-color: #3498db; box-shadow: 0 0 0 1px #3498db; }
+        #format-panel .format-color-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        #format-panel .format-color-row label { margin-right: 4px; }
         #format-panel input[type="number"] { width: 64px; padding: 6px 8px; font-size: 13px; }
         #format-panel .btn-close { margin-top: 12px; width: 100%; padding: 8px; background: #555; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
         #format-panel .btn-close:hover { background: #666; }
@@ -292,11 +389,17 @@
                 <h3 data-i18n="capture_formatTitle">Text and highlight format</h3>
                 <div class="format-row">
                     <label data-i18n="capture_textColor">Text color</label>
-                    <input type="color" id="format-text-color" value="#000000" data-i18n-title="capture_textColor">
+                    <div class="format-color-row">
+                        <div class="format-presets" id="format-text-presets" data-role="text"></div>
+                        <input type="color" id="format-text-color" value="#000000" data-i18n-title="capture_textColor">
+                    </div>
                 </div>
                 <div class="format-row">
                     <label data-i18n="capture_highlightColor">Highlight color</label>
-                    <input type="color" id="format-highlight-color" value="#ffff00" data-i18n-title="capture_highlightColor">
+                    <div class="format-color-row">
+                        <div class="format-presets" id="format-highlight-presets" data-role="highlight"></div>
+                        <input type="color" id="format-highlight-color" value="#ffff00" data-i18n-title="capture_highlightColor">
+                    </div>
                 </div>
                 <div class="format-row">
                     <label data-i18n="capture_fontSize">Font size</label>
@@ -330,6 +433,10 @@
         const screenId = urlParams.get('screenId');
         const totalScreens = urlParams.get('totalScreens');
         const lang = urlParams.get('lang') || 'en';
+        // Размер области захвата: берём максимум из main process (actualWidth/Height) и текущего окна (innerWidth/Height),
+        // чтобы на любых мониторах можно было выделить весь видимый экран
+        const screenWidth = Math.max(1, Math.max(parseInt(urlParams.get('actualWidth'), 10) || 0, window.innerWidth || 0) || 1920);
+        const screenHeight = Math.max(1, Math.max(parseInt(urlParams.get('actualHeight'), 10) || 0, window.innerHeight || 0) || 1080);
         
         const { ipcRenderer } = require('electron');
         window.__t = {};
@@ -555,6 +662,82 @@
         // Настройки формата текста и выделения (для аннотаций)
         let formatTextColor = '#000000';
         let formatHighlightColor = '#ffff00';
+        const FORMAT_STORAGE_KEYS = { textColor: 'capture-format-text-color', highlightColor: 'capture-format-highlight-color', recentText: 'capture-format-recent-text', recentHighlight: 'capture-format-recent-highlight' };
+        const FORMAT_PRESET_COLORS = ['#000000','#ffffff','#808080','#404040','#c0c0c0','#ff0000','#00aa00','#0066ff','#ffff00','#ff8800','#aa00ff','#00cccc','#ff69b4','#8b4513'];
+        const MAX_RECENT_COLORS = 8;
+        function toHex6(val) {
+            const m = (val || '').match(/^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
+            if (!m) return null;
+            let hex = m[1];
+            if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+            return '#' + hex.toLowerCase();
+        }
+        function loadFormatColors() {
+            try {
+                const t = localStorage.getItem(FORMAT_STORAGE_KEYS.textColor);
+                const h = localStorage.getItem(FORMAT_STORAGE_KEYS.highlightColor);
+                if (t && toHex6(t)) formatTextColor = toHex6(t);
+                if (h && toHex6(h)) formatHighlightColor = toHex6(h);
+            } catch (_) {}
+        }
+        function saveFormatColor(role, hex) {
+            const key = role === 'text' ? FORMAT_STORAGE_KEYS.textColor : FORMAT_STORAGE_KEYS.highlightColor;
+            const recentKey = role === 'text' ? FORMAT_STORAGE_KEYS.recentText : FORMAT_STORAGE_KEYS.recentHighlight;
+            try {
+                localStorage.setItem(key, hex);
+                let recent = [];
+                try { recent = JSON.parse(localStorage.getItem(recentKey) || '[]'); } catch (_) {}
+                const normalized = toHex6(hex);
+                if (normalized && !FORMAT_PRESET_COLORS.includes(normalized)) {
+                    recent = [normalized].concat(recent.filter(c => toHex6(c) !== normalized)).slice(0, MAX_RECENT_COLORS);
+                    localStorage.setItem(recentKey, JSON.stringify(recent));
+                }
+            } catch (_) {}
+        }
+        function getRecentColors(role) {
+            const key = role === 'text' ? FORMAT_STORAGE_KEYS.recentText : FORMAT_STORAGE_KEYS.recentHighlight;
+            try {
+                const arr = JSON.parse(localStorage.getItem(key) || '[]');
+                return arr.filter(c => toHex6(c)).slice(0, MAX_RECENT_COLORS);
+            } catch (_) { return []; }
+        }
+        function renderFormatPresets(role) {
+            const container = document.getElementById(role === 'text' ? 'format-text-presets' : 'format-highlight-presets');
+            const current = role === 'text' ? formatTextColor : formatHighlightColor;
+            const input = document.getElementById(role === 'text' ? 'format-text-color' : 'format-highlight-color');
+            const presetHex = FORMAT_PRESET_COLORS.map(toHex6).filter(Boolean);
+            const recent = getRecentColors(role).map(toHex6).filter(c => c && !presetHex.includes(c));
+            container.innerHTML = '';
+            presetHex.forEach(hex => {
+                const swatch = document.createElement('span');
+                swatch.className = 'format-swatch' + (toHex6(current) === hex ? ' active' : '');
+                swatch.style.backgroundColor = hex;
+                swatch.title = hex;
+                swatch.dataset.hex = hex;
+                swatch.onclick = () => {
+                    if (role === 'text') formatTextColor = hex; else formatHighlightColor = hex;
+                    input.value = hex;
+                    saveFormatColor(role, hex);
+                    renderFormatPresets('text'); renderFormatPresets('highlight');
+                };
+                container.appendChild(swatch);
+            });
+            recent.forEach(hex => {
+                const swatch = document.createElement('span');
+                swatch.className = 'format-swatch' + (toHex6(current) === hex ? ' active' : '');
+                swatch.style.backgroundColor = hex;
+                swatch.title = hex;
+                swatch.dataset.hex = hex;
+                swatch.onclick = () => {
+                    if (role === 'text') formatTextColor = hex; else formatHighlightColor = hex;
+                    input.value = hex;
+                    saveFormatColor(role, hex);
+                    renderFormatPresets('text'); renderFormatPresets('highlight');
+                };
+                container.appendChild(swatch);
+            });
+        }
+        loadFormatColors();
         let formatFontSize = 16;
         let formatFontBackgroundSize = 4;
         let formatHighlightSize = 4;
@@ -877,6 +1060,24 @@
             screenInfo.style.display = 'none';
         }
 
+        // Ограничить выделение границами экрана (не больше экрана)
+        function clampSelectionToScreen() {
+            const maxW = screenWidth;
+            const maxH = screenHeight;
+            let left = parseInt(selectionArea.style.left, 10) || 0;
+            let top = parseInt(selectionArea.style.top, 10) || 0;
+            let width = parseInt(selectionArea.style.width, 10) || 0;
+            let height = parseInt(selectionArea.style.height, 10) || 0;
+            width = Math.max(0, Math.min(width, maxW - left));
+            height = Math.max(0, Math.min(height, maxH - top));
+            left = Math.max(0, Math.min(left, maxW - width));
+            top = Math.max(0, Math.min(top, maxH - height));
+            selectionArea.style.left = left + 'px';
+            selectionArea.style.top = top + 'px';
+            selectionArea.style.width = width + 'px';
+            selectionArea.style.height = height + 'px';
+        }
+
         // Начало выделения: клик = старт, тянуть без отпускания = размер
         function startSelectionAt(x, y) {
             startX = x;
@@ -931,6 +1132,7 @@
                 selectionArea.style.height = Math.abs(height) + 'px';
                 selectionArea.style.left = (width < 0 ? currentX : startX) + 'px';
                 selectionArea.style.top = (height < 0 ? currentY : startY) + 'px';
+                clampSelectionToScreen();
             } else if (isResizing && activeHandle) {
                 handleResize(e);
             } else if (isDragging) {
@@ -962,12 +1164,16 @@
                 isSelecting = false;
                 const width = parseInt(selectionArea.style.width);
                 const height = parseInt(selectionArea.style.height);
+                const cursorInThisWindow = e.clientX >= 0 && e.clientX <= window.innerWidth && e.clientY >= 0 && e.clientY <= window.innerHeight;
                 
                 if (width > 50 && height > 50) {
-                    // Сначала закрываем остальные экраны, оставляем только этот
-                    const { ipcRenderer } = require('electron');
-                    ipcRenderer.send('activate-single-window', screenId);
-                    showToolbar();
+                    if (cursorInThisWindow) {
+                        const { ipcRenderer } = require('electron');
+                        ipcRenderer.send('activate-single-window', screenId);
+                        showToolbar();
+                    } else {
+                        showToolbar();
+                    }
                 } else {
                     selectionArea.style.display = 'none';
                 }
@@ -1050,8 +1256,8 @@
             
             if (ratio !== null) {
                 const minSize = 50;
-                const maxW = window.innerWidth;
-                const maxH = window.innerHeight;
+                const maxW = screenWidth;
+                const maxH = screenHeight;
                 switch(handleClass) {
                     case 'resize-e':
                     case 'resize-se':
@@ -1103,6 +1309,7 @@
             selectionArea.style.width = newWidth + 'px';
             selectionArea.style.height = newHeight + 'px';
             
+            clampSelectionToScreen();
             showToolbar();
         }
         
@@ -1111,8 +1318,8 @@
             const newTop = e.clientY - dragStartY;
             
             // Ограничиваем перемещение в пределах экрана
-            const maxLeft = window.innerWidth - parseInt(selectionArea.style.width);
-            const maxTop = window.innerHeight - parseInt(selectionArea.style.height);
+            const maxLeft = screenWidth - parseInt(selectionArea.style.width);
+            const maxTop = screenHeight - parseInt(selectionArea.style.height);
             
             selectionArea.style.left = Math.max(0, Math.min(maxLeft, newLeft)) + 'px';
             selectionArea.style.top = Math.max(0, Math.min(maxTop, newTop)) + 'px';
@@ -1128,8 +1335,8 @@
         const left = parseInt(selectionArea.style.left, 10) || 0;
         const top = parseInt(selectionArea.style.top, 10) || 0;
         const ratio = ratioW / ratioH;
-        const maxW = Math.max(50, window.innerWidth - left);
-        const maxH = Math.max(50, window.innerHeight - top);
+        const maxW = Math.max(50, screenWidth - left);
+        const maxH = Math.max(50, screenHeight - top);
         const minSize = 50;
         let newHeight = Math.min(maxH, maxW / ratio);
         let newWidth = newHeight * ratio;
@@ -1149,23 +1356,42 @@
     // Создаем кнопки управления если их еще нет
     if (!toolbar.innerHTML) {
             const t = window.__t || {};
-            toolbar.innerHTML = 
-            '<button class="tool-btn crop-btn" id="crop-toggle-btn" title="' + (t.capture_crop || 'Crop') + '">' + (t.capture_crop || 'Crop') + '</button>' +
-            '<button class="tool-btn" id="format-toggle-btn" title="' + (t.capture_formatTitle || 'Format') + '">Аа</button>' +
-            '<button class="tool-btn" id="rect-btn" title="' + (t.capture_rect || 'Rectangle') + '">□</button>' +
-            '<button class="tool-btn" id="circle-btn" title="' + (t.capture_circle || 'Circle') + '">○</button>' +
-            '<button class="tool-btn" id="text-btn" title="' + (t.capture_text || 'Text') + '">T</button>' +
-            '<button class="tool-btn" id="number-btn" title="' + (t.capture_number || 'Number') + '">№</button>' +
-            '<button class="tool-btn" id="arrow-btn" title="' + (t.capture_arrow || 'Arrow') + '">→</button>' +
-            '<button class="tool-btn" id="brush-btn" title="' + (t.capture_brush || 'Brush') + '">🖌</button>' +
-            '<button class="tool-btn" id="blur-btn" title="' + (t.capture_blur || 'Blur') + '">⊞</button>' +
-            '<button class="tool-btn" id="move-btn" title="' + (t.capture_move || 'Move') + '">✥</button>' +
-            '<button class="tool-btn" id="copy-btn" title="' + (t.capture_copy || 'Copy') + '">📋</button>' +
-            '<button class="tool-btn" id="save-btn" title="' + (t.capture_saveFile || 'Save') + '">💾</button>' +
-            '<button class="tool-btn" id="save-to-server-btn" title="' + (t.capture_uploadServer || 'Upload') + '">🌐</button>' +
-            '<button class="tool-btn" id="undo-btn" title="' + (t.capture_undo || 'Undo') + '">↶</button>' +
-            '<button class="tool-btn" id="close-btn" title="' + (t.capture_closeBtn || 'Close') + '">✕</button>';
+            const btns = [
+                '<button class="tool-btn" id="maximize-btn" title="' + (t.capture_maximize || 'Весь экран') + '">⛶</button>',
+                '<button class="tool-btn crop-btn" id="crop-toggle-btn" title="' + (t.capture_crop || 'Crop') + '">' + (t.capture_crop || 'Crop') + '</button>',
+                '<button class="tool-btn" id="format-toggle-btn" title="' + (t.capture_formatTitle || 'Format') + '">Аа</button>',
+                '<button class="tool-btn" id="rect-btn" title="' + (t.capture_rect || 'Rectangle') + '">□</button>',
+                '<button class="tool-btn" id="circle-btn" title="' + (t.capture_circle || 'Circle') + '">○</button>',
+                '<button class="tool-btn" id="text-btn" title="' + (t.capture_text || 'Text') + '">T</button>',
+                '<button class="tool-btn" id="number-btn" title="' + (t.capture_number || 'Number') + '">№</button>',
+                '<button class="tool-btn" id="arrow-btn" title="' + (t.capture_arrow || 'Arrow') + '">→</button>',
+                '<button class="tool-btn" id="brush-btn" title="' + (t.capture_brush || 'Brush') + '">🖌</button>',
+                '<button class="tool-btn" id="blur-btn" title="' + (t.capture_blur || 'Blur') + '">⊞</button>',
+                '<button class="tool-btn" id="move-btn" title="' + (t.capture_move || 'Move') + '">✥</button>',
+                '<button class="tool-btn" id="copy-btn" title="' + (t.capture_copy || 'Copy') + '">📋</button>',
+                '<button class="tool-btn" id="save-btn" title="' + (t.capture_saveFile || 'Save') + '">💾</button>',
+                '<button class="tool-btn" id="save-to-server-btn" title="' + (t.capture_uploadServer || 'Upload') + '">🌐</button>',
+                '<button class="tool-btn" id="undo-btn" title="' + (t.capture_undo || 'Undo') + '">↶</button>',
+                '<button class="tool-btn" id="close-btn" title="' + (t.capture_closeBtn || 'Close') + '">✕</button>'
+            ];
+            const topHtml = btns.slice(0, 4).join('');
+            const rightHtml = btns.slice(4, 8).join('');
+            const bottomHtml = btns.slice(8, 12).join('');
+            const leftHtml = btns.slice(12, 16).join('');
+            const dragHandleHtml = '<div class="toolbar-drag-handle" title="' + (t.capture_move || 'Перетащить') + '"></div>';
+            toolbar.innerHTML =
+                '<div class="toolbar-panel" data-side="top">' + dragHandleHtml + '<div class="toolbar-side toolbar-top">' + topHtml + '</div></div>' +
+                '<div class="toolbar-panel" data-side="right">' + dragHandleHtml + '<div class="toolbar-side toolbar-right">' + rightHtml + '</div></div>' +
+                '<div class="toolbar-panel" data-side="bottom">' + dragHandleHtml + '<div class="toolbar-side toolbar-bottom">' + bottomHtml + '</div></div>' +
+                '<div class="toolbar-panel" data-side="left">' + dragHandleHtml + '<div class="toolbar-side toolbar-left">' + leftHtml + '</div></div>';
         
+        document.getElementById('maximize-btn').onclick = () => {
+            selectionArea.style.left = '0';
+            selectionArea.style.top = '0';
+            selectionArea.style.width = screenWidth + 'px';
+            selectionArea.style.height = screenHeight + 'px';
+            showToolbar();
+        };
         document.getElementById('crop-toggle-btn').onclick = () => {
             document.getElementById('crop-popup').classList.toggle('show');
             updateCropOptionActive();
@@ -1213,14 +1439,26 @@
                 document.getElementById('format-font-size').value = String(formatFontSize);
                 document.getElementById('format-font-bg-size').value = String(formatFontBackgroundSize);
                 document.getElementById('format-highlight-size').value = String(formatHighlightSize);
+                renderFormatPresets('text');
+                renderFormatPresets('highlight');
             }
         };
         document.getElementById('format-popup').onclick = (e) => {
             if (e.target.id === 'format-popup') e.target.classList.remove('show');
         };
         document.getElementById('format-close-btn').onclick = () => document.getElementById('format-popup').classList.remove('show');
-        document.getElementById('format-text-color').oninput = (e) => { formatTextColor = e.target.value; };
-        document.getElementById('format-highlight-color').oninput = (e) => { formatHighlightColor = e.target.value; };
+        document.getElementById('format-text-color').oninput = (e) => {
+            formatTextColor = e.target.value;
+            saveFormatColor('text', formatTextColor);
+            renderFormatPresets('text');
+            renderFormatPresets('highlight');
+        };
+        document.getElementById('format-highlight-color').oninput = (e) => {
+            formatHighlightColor = e.target.value;
+            saveFormatColor('highlight', formatHighlightColor);
+            renderFormatPresets('text');
+            renderFormatPresets('highlight');
+        };
         document.getElementById('format-font-size').onchange = (e) => { formatFontSize = Math.max(8, Math.min(120, parseInt(e.target.value, 10) || 16)); };
         document.getElementById('format-font-bg-size').onchange = (e) => { formatFontBackgroundSize = Math.max(0, Math.min(50, parseInt(e.target.value, 10) || 4)); };
         document.getElementById('format-highlight-size').onchange = (e) => { formatHighlightSize = Math.max(1, Math.min(30, parseInt(e.target.value, 10) || 4)); };
@@ -1622,6 +1860,12 @@
         // Добавляем обработчики для кнопок
         const { ipcRenderer } = require('electron');
         ipcRenderer.on('upload-complete', (event, { success }) => {
+            document.body.classList.remove('capture-hide-ui');
+            const toolbar = document.getElementById('toolbar');
+            if (toolbar && !success) {
+                toolbar.style.visibility = '';
+                toolbar.style.display = 'block';
+            }
             if (success) closeAllWindows();
         });
         function sendCaptureArea(saveLocally) {
@@ -1630,6 +1874,11 @@
             const width = parseInt(selectionArea.style.width, 10) || 0;
             const height = parseInt(selectionArea.style.height, 10) || 0;
             if (width < 10 || height < 10) return;
+            document.body.classList.add('capture-hide-ui');
+            const toolbar = document.getElementById('toolbar');
+            if (toolbar) {
+                toolbar.style.visibility = 'hidden';
+            }
             ipcRenderer.send('capture-area', {
                 x: x, y: y, width: width, height: height,
                 screenId: screenId,
@@ -1643,6 +1892,33 @@
         document.getElementById('close-btn').onclick = () => {
             closeAllWindows();
         };
+        
+        (function setupToolbarDrag() {
+            const handleHeight = 20;
+            function setupPanelDrag(panel) {
+                const handle = panel.querySelector('.toolbar-drag-handle');
+                if (!handle) return;
+                let dragging = false, startX, startY, startLeft, startTop;
+                handle.addEventListener('mousedown', function(e) {
+                    if (e.button !== 0) return;
+                    dragging = true;
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    startLeft = parseInt(panel.style.left, 10) || 0;
+                    startTop = parseInt(panel.style.top, 10) || 0;
+                    e.preventDefault();
+                });
+                document.addEventListener('mousemove', function(e) {
+                    if (!dragging) return;
+                    panel.style.left = (startLeft + e.clientX - startX) + 'px';
+                    panel.style.top = (startTop + e.clientY - startY) + 'px';
+                });
+                document.addEventListener('mouseup', function() {
+                    dragging = false;
+                });
+            }
+            toolbar.querySelectorAll('.toolbar-panel').forEach(setupPanelDrag);
+        })();
     }
     
     // Подсветка активного кропа при перерисовке тулбара
@@ -1652,66 +1928,159 @@
         cropToggleBtn.textContent = activeCropRatio ? ((window.__t && window.__t.capture_crop ? window.__t.capture_crop : 'Crop') + ' ' + activeCropRatio.w + ':' + activeCropRatio.h) : (window.__t && window.__t.capture_crop ? window.__t.capture_crop : 'Crop');
     }
     
-    // Приблизительные размеры тулбара (одна кнопка кропа)
-    const toolbarWidthColumn = 50;
-    const toolbarHeightColumn = 320;
-    const toolbarWidthRow = 380;
-    const toolbarHeightRow = 50;
+    const pad = 10;
+    const gap = 6;
+    const sidePad = 6;
+    const btnSize = 44;
+    const stripSize = 50;
+    const BUTTON_IDS = ['maximize-btn', 'crop-toggle-btn', 'format-toggle-btn', 'rect-btn', 'circle-btn', 'text-btn', 'number-btn', 'arrow-btn', 'brush-btn', 'blur-btn', 'move-btn', 'copy-btn', 'save-btn', 'save-to-server-btn', 'undo-btn', 'close-btn'];
+    const totalButtons = BUTTON_IDS.length;
     
-    let toolbarLeft, toolbarTop;
-    let flexDirection = 'column';
+    const topRow = toolbar.querySelector('.toolbar-top');
+    const rightCol = toolbar.querySelector('.toolbar-right');
+    const bottomRow = toolbar.querySelector('.toolbar-bottom');
+    const leftCol = toolbar.querySelector('.toolbar-left');
+    if (!topRow || !rightCol || !bottomRow || !leftCol) return;
     
-    // Проверяем доступное пространство
-    const spaceRight = window.innerWidth - rect.right - 20;
-    const spaceLeft = rect.left - 20;
-    const spaceTop = rect.top - 20;
-    const spaceBottom = window.innerHeight - rect.bottom - 20;
+    const spaceTop = rect.top - pad;
+    const spaceBottom = screenHeight - rect.bottom - pad;
+    const spaceLeft = rect.left - pad;
+    const spaceRight = screenWidth - rect.right - pad;
     
-    // Пробуем разместить справа (колонка)
-    if (spaceRight >= toolbarWidthColumn && rect.top + toolbarHeightColumn <= window.innerHeight) {
-        toolbarLeft = rect.right + 10;
-        toolbarTop = rect.top;
-        flexDirection = 'column';
-    }
-    // Пробуем разместить слева (колонка)
-    else if (spaceLeft >= toolbarWidthColumn && rect.top + toolbarHeightColumn <= window.innerHeight) {
-        toolbarLeft = rect.left - toolbarWidthColumn - 10;
-        toolbarTop = rect.top;
-        flexDirection = 'column';
-    }
-    // Пробуем разместить сверху (ряд)
-    else if (spaceTop >= toolbarHeightRow && rect.left + toolbarWidthRow <= window.innerWidth) {
-        toolbarLeft = rect.left;
-        toolbarTop = rect.top - toolbarHeightRow - 10;
-        flexDirection = 'row';
-    }
-    // Пробуем разместить снизу (ряд)
-    else if (spaceBottom >= toolbarHeightRow && rect.left + toolbarWidthRow <= window.innerWidth) {
-        toolbarLeft = rect.left;
-        toolbarTop = rect.bottom + 10;
-        flexDirection = 'row';
-    }
-    // Если ничего не подходит - прижимаем к углу экрана (колонка)
-    else {
-        toolbarLeft = Math.max(10, Math.min(window.innerWidth - toolbarWidthColumn - 10, rect.left));
-        toolbarTop = Math.max(10, Math.min(window.innerHeight - toolbarHeightColumn - 10, rect.top));
-        flexDirection = 'column';
-    }
+    function capacityColumn(h) { return Math.max(0, Math.min(totalButtons, Math.floor((h - sidePad * 2) / (btnSize + gap)))); }
+    function capacityRow(w) { return Math.max(0, Math.min(totalButtons, Math.floor((w - sidePad * 2) / (btnSize + gap)))); }
     
-    // Применяем стили
-    toolbar.style.left = toolbarLeft + 'px';
-    toolbar.style.top = toolbarTop + 'px';
-    toolbar.style.display = 'flex';
-    toolbar.style.flexDirection = flexDirection;
+    const order = ['right', 'left', 'bottom', 'top'];
+    let capR = spaceRight >= stripSize ? capacityColumn(rect.height) : 0;
+    let capL = spaceLeft >= stripSize ? capacityColumn(rect.height) : 0;
+    let capB = spaceBottom >= stripSize ? capacityRow(rect.width) : 0;
+    let capT = spaceTop >= stripSize ? capacityRow(rect.width) : 0;
     
-    // Добавляем дополнительные отступы для row направления
-    if (flexDirection === 'row') {
-        toolbar.style.gap = '5px';
-        toolbar.style.padding = '5px 8px';
+    const totalCapacity = capR + capL + capB + capT;
+    const isSmallSelection = (rect.width < 400 || rect.height < 300);
+    let inside = false;
+    let innerPad = 8, innerW = rect.width - 16, innerH = rect.height - 16, midH = innerH, topUsed = 0, bottomUsed = 0;
+    if (totalCapacity >= totalButtons) {
+        toolbar.classList.remove('toolbar-inside');
+    } else if (isSmallSelection) {
+        toolbar.classList.remove('toolbar-inside');
+        const perSide = Math.ceil(totalButtons / 4);
+        capR = capL = capB = capT = perSide;
     } else {
-        toolbar.style.gap = '5px';
-        toolbar.style.padding = '8px 5px';
+        toolbar.classList.add('toolbar-inside');
+        inside = true;
+        innerPad = 8;
+        innerH = rect.height - innerPad * 2;
+        innerW = rect.width - innerPad * 2;
+        capT = capacityRow(innerW);
+        capB = capacityRow(innerW);
+        topUsed = (capT > 0 ? stripSize + innerPad : 0);
+        bottomUsed = (capB > 0 ? stripSize + innerPad : 0);
+        midH = Math.max(0, innerH - topUsed - bottomUsed);
+        capR = capacityColumn(midH);
+        capL = capacityColumn(midH);
     }
+    
+    const counts = { right: capR, left: capL, bottom: capB, top: capT };
+    const sideEls = { right: rightCol, left: leftCol, bottom: bottomRow, top: topRow };
+    let idx = 0;
+    const bySide = { right: [], left: [], bottom: [], top: [] };
+    for (const side of order) {
+        const n = Math.min(counts[side], totalButtons - idx);
+        for (let i = 0; i < n; i++) bySide[side].push(idx++);
+    }
+    
+    const getButtonsInOrder = () => BUTTON_IDS.map(id => document.getElementById(id)).filter(Boolean);
+    const allBtns = getButtonsInOrder();
+    for (const side of order) {
+        const el = sideEls[side];
+        el.innerHTML = '';
+        bySide[side].forEach(i => { if (allBtns[i]) el.appendChild(allBtns[i]); });
+        el.style.display = bySide[side].length ? 'flex' : 'none';
+        el.classList.remove('toolbar-side-wrap');
+    }
+    
+    const stripRects = [];
+    function addStrip(side, n, screenLeft, screenTop, w, h) {
+        if (n <= 0) return;
+        stripRects.push({ left: screenLeft, top: screenTop, width: w, height: h, side: side, n: n });
+    }
+    
+    const outsidePad = pad;
+    if (inside) {
+        if (bySide.top.length) {
+            const n = bySide.top.length;
+            const w = sidePad * 2 + n * (btnSize + gap) - gap;
+            addStrip('top', n, rect.left + innerPad + Math.max(0, (innerW - w) / 2), rect.top + innerPad, w, stripSize);
+        }
+        if (bySide.bottom.length) {
+            const n = bySide.bottom.length;
+            const w = sidePad * 2 + n * (btnSize + gap) - gap;
+            addStrip('bottom', n, rect.left + innerPad + Math.max(0, (innerW - w) / 2), rect.bottom - innerPad - stripSize, w, stripSize);
+        }
+        const midTop = rect.top + innerPad + topUsed;
+        if (bySide.right.length) {
+            const n = bySide.right.length;
+            const h = sidePad * 2 + n * (btnSize + gap) - gap;
+            addStrip('right', n, rect.right - innerPad - stripSize, midTop + Math.max(0, (midH - h) / 2), stripSize, h);
+        }
+        if (bySide.left.length) {
+            const n = bySide.left.length;
+            const h = sidePad * 2 + n * (btnSize + gap) - gap;
+            addStrip('left', n, rect.left + innerPad, midTop + Math.max(0, (midH - h) / 2), stripSize, h);
+        }
+    } else {
+    if (bySide.right.length) {
+        const n = bySide.right.length;
+        const h = sidePad * 2 + n * (btnSize + gap) - gap;
+        addStrip('right', n, rect.right + outsidePad, rect.top + Math.max(0, (rect.height - h) / 2), stripSize, h);
+    }
+    if (bySide.left.length) {
+        const n = bySide.left.length;
+        const h = sidePad * 2 + n * (btnSize + gap) - gap;
+        addStrip('left', n, rect.left - outsidePad - stripSize, rect.top + Math.max(0, (rect.height - h) / 2), stripSize, h);
+    }
+    if (bySide.bottom.length) {
+        const n = bySide.bottom.length;
+        const w = sidePad * 2 + n * (btnSize + gap) - gap;
+        addStrip('bottom', n, rect.left + Math.max(0, (rect.width - w) / 2), rect.bottom + outsidePad, w, stripSize);
+    }
+    if (bySide.top.length) {
+        const n = bySide.top.length;
+        const w = sidePad * 2 + n * (btnSize + gap) - gap;
+        addStrip('top', n, rect.left + Math.max(0, (rect.width - w) / 2), rect.top - outsidePad - stripSize, w, stripSize);
+    }
+    }
+    
+    if (stripRects.length === 0) {
+        toolbar.style.display = 'block';
+        resizeAnnotationCanvas();
+        return;
+    }
+    
+    const handleHeight = 20;
+    toolbar.style.left = '';
+    toolbar.style.top = '';
+    toolbar.style.width = '';
+    toolbar.style.height = '';
+    
+    for (const side of ['top', 'right', 'bottom', 'left']) {
+        const panel = toolbar.querySelector('.toolbar-panel[data-side="' + side + '"]');
+        if (!panel) continue;
+        const r = stripRects.find(x => x.side === side);
+        if (!r) {
+            panel.style.display = 'none';
+            continue;
+        }
+        panel.style.display = 'flex';
+        panel.style.flexDirection = 'column';
+        panel.style.left = r.left + 'px';
+        panel.style.top = (r.top - handleHeight) + 'px';
+        panel.style.width = r.width + 'px';
+        panel.style.height = (r.height + handleHeight) + 'px';
+    }
+    
+    toolbar.style.display = 'block';
     resizeAnnotationCanvas();
 }
         // Функция закрытия всех окон
@@ -1732,36 +2101,33 @@
         const urlParams = new URLSearchParams(window.location.search);
         const screenId = urlParams.get('screenId');
         const scaleFactor = parseFloat(urlParams.get('scaleFactor')) || 1;
-        const actualWidth = parseInt(urlParams.get('actualWidth'));
-        const actualHeight = parseInt(urlParams.get('actualHeight'));
+        const actualWidth = parseInt(urlParams.get('actualWidth'), 10);
+        const actualHeight = parseInt(urlParams.get('actualHeight'), 10);
+        const screenW = Math.max(1, Math.max(actualWidth || 0, window.innerWidth || 0) || 1920);
+        const screenH = Math.max(1, Math.max(actualHeight || 0, window.innerHeight || 0) || 1080);
 
         console.log(`Screen ${screenId} info:`, {
             scaleFactor, actualWidth, actualHeight,
+            screenSize: { width: screenW, height: screenH },
             windowInner: { width: window.innerWidth, height: window.innerHeight }
         });
 
-        // Динамически устанавливаем размеры overlay
-        document.addEventListener('DOMContentLoaded', () => {
+        // Динамически устанавливаем размеры overlay по размерам экрана из main process
+        function setOverlaySize() {
             const overlay = document.getElementById('overlay');
             if (overlay) {
-                overlay.style.width = window.innerWidth + 'px';
-                overlay.style.height = window.innerHeight + 'px';
+                overlay.style.width = screenW + 'px';
+                overlay.style.height = screenH + 'px';
             }
+            document.body.style.width = screenW + 'px';
+            document.body.style.height = screenH + 'px';
+        }
 
-            // Устанавливаем размер body
-            document.body.style.width = window.innerWidth + 'px';
-            document.body.style.height = window.innerHeight + 'px';
-        });
+        document.addEventListener('DOMContentLoaded', setOverlaySize);
 
         // Также обрабатываем ресайз окна
         window.addEventListener('resize', () => {
-            const overlay = document.getElementById('overlay');
-            if (overlay) {
-                overlay.style.width = window.innerWidth + 'px';
-                overlay.style.height = window.innerHeight + 'px';
-            }
-            document.body.style.width = window.innerWidth + 'px';
-            document.body.style.height = window.innerHeight + 'px';
+            setOverlaySize();
         });
     })();
 </script>
