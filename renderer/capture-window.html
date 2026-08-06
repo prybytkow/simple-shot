@@ -455,16 +455,76 @@
                 if (k && window.__t[k]) el.title = window.__t[k];
             });
         }).catch(() => {});
-        
-        ipcRenderer.on('apply-watermark', (event, { dataUrl, watermark }) => {
-            const img = new Image();
-            img.onload = () => {
+
+        function toUint8Array(payload) {
+            if (!payload) return new Uint8Array(0);
+            if (payload instanceof Uint8Array) return payload;
+            if (payload instanceof ArrayBuffer) return new Uint8Array(payload);
+            if (ArrayBuffer.isView(payload)) {
+                return new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
+            }
+            // Electron may send Node Buffer as { type: 'Buffer', data: number[] }
+            if (payload.type === 'Buffer' && Array.isArray(payload.data)) {
+                return Uint8Array.from(payload.data);
+            }
+            return new Uint8Array(payload);
+        }
+
+        function getSrgbContext(canvas) {
+            try {
+                return canvas.getContext('2d', { colorSpace: 'srgb', willReadFrequently: true });
+            } catch (_) {
+                return canvas.getContext('2d');
+            }
+        }
+
+        async function loadPngBitmap(pngBuffer) {
+            const bytes = toUint8Array(pngBuffer);
+            const blob = new Blob([bytes], { type: 'image/png' });
+            if (typeof createImageBitmap === 'function') {
                 try {
+                    // Keep pixel values as-is — avoid display/ICC color conversion
+                    return await createImageBitmap(blob, { colorSpaceConversion: 'none' });
+                } catch (_) { /* fall through */ }
+            }
+            return await new Promise((resolve, reject) => {
+                const img = new Image();
+                const url = URL.createObjectURL(blob);
+                img.onload = () => {
+                    URL.revokeObjectURL(url);
+                    resolve(img);
+                };
+                img.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    reject(new Error('Не удалось загрузить изображение'));
+                };
+                img.src = url;
+            });
+        }
+
+        async function canvasToPngBytes(canvas) {
+            const blob = await new Promise((resolve, reject) => {
+                const done = (b) => (b ? resolve(b) : reject(new Error('PNG export failed')));
+                if (typeof canvas.convertToBlob === 'function') {
+                    canvas.convertToBlob({ type: 'image/png' }).then(done).catch(reject);
+                } else {
+                    canvas.toBlob(done, 'image/png');
+                }
+            });
+            return new Uint8Array(await blob.arrayBuffer());
+        }
+        
+        ipcRenderer.on('apply-watermark', (event, { pngBuffer, watermark }) => {
+            (async () => {
+                try {
+                    const bitmap = await loadPngBitmap(pngBuffer);
                     const canvas = document.createElement('canvas');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0);
+                    canvas.width = bitmap.width;
+                    canvas.height = bitmap.height;
+                    const ctx = getSrgbContext(canvas);
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.drawImage(bitmap, 0, 0);
+                    if (typeof bitmap.close === 'function') bitmap.close();
                     const padding = 20;
                     ctx.font = `${watermark.fontSize || 24}px sans-serif`;
                     ctx.globalAlpha = watermark.opacity != null ? watermark.opacity : 0.5;
@@ -483,27 +543,28 @@
                     else { x = (canvas.width - tw) / 2; y = canvas.height / 2; }
                     ctx.fillText(text, x, y);
                     ctx.globalAlpha = 1;
-                    ipcRenderer.send('watermark-done', canvas.toDataURL('image/png'));
+                    const out = await canvasToPngBytes(canvas);
+                    ipcRenderer.send('watermark-done', out);
                 } catch (err) {
                     console.error('Watermark apply error:', err);
                     ipcRenderer.send('watermark-error', err instanceof Error ? err.message : 'Unknown error');
                 }
-            };
-            img.onerror = () => ipcRenderer.send('watermark-error', 'Не удалось загрузить изображение');
-            img.src = dataUrl;
+            })();
         });
         
-        ipcRenderer.on('compose-image', (event, { dataUrl, annotations, watermark }) => {
-            const img = new Image();
-            img.onload = () => {
+        ipcRenderer.on('compose-image', (event, { pngBuffer, annotations, watermark }) => {
+            (async () => {
                 try {
+                    const bitmap = await loadPngBitmap(pngBuffer);
                     const canvas = document.createElement('canvas');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    const ctx = canvas.getContext('2d');
+                    canvas.width = bitmap.width;
+                    canvas.height = bitmap.height;
+                    const ctx = getSrgbContext(canvas);
                     const W = canvas.width;
                     const H = canvas.height;
-                    ctx.drawImage(img, 0, 0);
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.drawImage(bitmap, 0, 0);
+                    if (typeof bitmap.close === 'function') bitmap.close();
                     const defStroke = '#000000';
                     const defFill = '#ffff00';
                     const defFontSize = 16;
@@ -533,7 +594,11 @@
                                 out[o] = r / n; out[o + 1] = g / n; out[o + 2] = b / n; out[o + 3] = a / n;
                             }
                         }
-                        ctx.putImageData(new ImageData(out, W, H), 0, 0);
+                        try {
+                            ctx.putImageData(new ImageData(out, W, H, { colorSpace: 'srgb' }), 0, 0);
+                        } catch (_) {
+                            ctx.putImageData(new ImageData(out, W, H), 0, 0);
+                        }
                     }
                     (annotations || []).forEach(a => {
                         const x = (a.x || 0) * W, y = (a.y || 0) * H;
@@ -627,14 +692,13 @@
                         ctx.fillText(text, wx, wy);
                         ctx.globalAlpha = 1;
                     }
-                    ipcRenderer.send('compose-image-done', canvas.toDataURL('image/png'));
+                    const out = await canvasToPngBytes(canvas);
+                    ipcRenderer.send('compose-image-done', out);
                 } catch (err) {
                     console.error('Compose image error:', err);
                     ipcRenderer.send('compose-image-error', err instanceof Error ? err.message : 'Unknown error');
                 }
-            };
-            img.onerror = () => ipcRenderer.send('compose-image-error', 'Не удалось загрузить изображение');
-            img.src = dataUrl;
+            })();
         });
         
         // Показываем информацию об экране

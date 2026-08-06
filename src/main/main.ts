@@ -8,6 +8,9 @@ import { resolveLanguage, getTranslations } from './i18n';
 
 process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true';
 
+// Avoid Chromium color-management shifts when compositing / capturing
+app.commandLine.appendSwitch('force-color-profile', 'srgb');
+
 // Логируем необработанные ошибки (приложение может выходить из-за падения, а не app.quit)
 process.on('uncaughtException', (err) => {
   console.error('[uncaughtException]', err);
@@ -23,7 +26,7 @@ let historyWindow: BrowserWindow | null = null;
 let isQuitting = false;
 
 interface Settings {
-  saveMethod: 'ssh' | 'ftp' | 's3';
+  saveMethod: 'ssh' | 'ftp' | 's3' | 'api';
   baseUrl: string;
   language?: string;
   watermark?: {
@@ -57,6 +60,10 @@ interface Settings {
     region: string;
     endpoint: string;
   };
+  api: {
+    endpoint: string;
+    apiKey: string;
+  };
 }
 
 const settingsPath = path.join(app.getPath('userData'), 'settings.json');
@@ -69,17 +76,31 @@ export function getMainWindow(): BrowserWindow | null {
 
 // Загрузка настроек
 export function loadSettings(): Settings {
+  const defaults = defaultSettings();
   try {
     if (fs.existsSync(settingsPath)) {
       const data = fs.readFileSync(settingsPath, 'utf8');
-      return JSON.parse(data);
+      const parsed = JSON.parse(data) as Partial<Settings>;
+      return {
+        ...defaults,
+        ...parsed,
+        saveMethod: parsed.saveMethod || defaults.saveMethod,
+        baseUrl: parsed.baseUrl ?? defaults.baseUrl,
+        language: parsed.language ?? defaults.language,
+        watermark: { ...defaults.watermark!, ...parsed.watermark },
+        ssh: { ...defaults.ssh, ...parsed.ssh },
+        ftp: { ...defaults.ftp, ...parsed.ftp },
+        s3: { ...defaults.s3, ...parsed.s3 },
+        api: { ...defaults.api, ...parsed.api }
+      };
     }
   } catch (error) {
     console.error('Error loading settings:', error);
   }
-  
-  // Настройки по умолчанию
-  // Default: system language (empty or 'system'); English is fallback in resolveLanguage
+  return defaults;
+}
+
+function defaultSettings(): Settings {
   return {
     saveMethod: 'ssh',
     baseUrl: 'https://mysite.com',
@@ -87,7 +108,7 @@ export function loadSettings(): Settings {
     watermark: {
       enabled: false,
       text: '',
-      position: 'bottom-right' as const,
+      position: 'bottom-right',
       fontSize: 24,
       color: '#ffffff',
       opacity: 0.5
@@ -114,6 +135,10 @@ export function loadSettings(): Settings {
       bucket: '',
       region: 'us-east-1',
       endpoint: ''
+    },
+    api: {
+      endpoint: '',
+      apiKey: ''
     }
   };
 }

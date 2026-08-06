@@ -54,6 +54,7 @@
         .method.s3 { background: #e8f4fd; color: #1976d2; }
         .method.ftp { background: #fff3e0; color: #e65100; }
         .method.ssh { background: #e8f5e9; color: #2e7d32; }
+        .method.api { background: #f3e5f5; color: #7b1fa2; }
         .method.local { background: #f3e5f5; color: #6a1b9a; }
         .link-wrap {
             flex: 1;
@@ -108,6 +109,7 @@
             if (m === 's3') return 's3';
             if (m === 'ftp') return 'ftp';
             if (m === 'ssh') return 'ssh';
+            if (m === 'api') return 'api';
             return 'local';
         }
 

@@ -1,28 +1,44 @@
-import { app, BrowserWindow, screen, ipcMain, desktopCapturer, nativeImage, clipboard, dialog } from 'electron';
+import { app, BrowserWindow, screen, ipcMain, desktopCapturer, clipboard, dialog } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { addToHistory } from './history';
 import { S3Uploader } from './uploaders/s3-uploader';
 import { FTPUploader } from './uploaders/ftp-uploader';
 import { SSHUploader } from './uploaders/ssh-uploader';
+import { ApiUploader } from './uploaders/api-uploader';
 
 import { loadSettings, getMainWindow } from './main';
 import { resolveLanguage } from './i18n';
+import { captureRegionGdi } from './gdi-capture';
 
 let overlayWindows: BrowserWindow[] = [];
 let activeWindow: BrowserWindow | null = null;
 const pendingWatermark: Map<number, { saveLocally: boolean; fileName: string; settings: any }> = new Map();
 
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/** Hide overlays so they are not included in the framebuffer capture. */
+async function hideOverlaysForCapture(): Promise<void> {
+  for (const win of overlayWindows) {
+    if (!win.isDestroyed()) {
+      win.setOpacity(0);
+      win.hide();
+    }
+  }
+  // Let the compositor drop the overlay from the desktop image
+  await sleep(80);
+}
+
 async function captureScreenshot(areaData: any, sourceDisplayId?: number): Promise<Buffer> {
   const { x, y, width, height } = areaData;
 
   console.log(`📱 Capture area: ${x},${y} ${width}x${height} from display: ${sourceDisplayId}`);
-  
-  // Получаем информацию о всех дисплеях
+
   const displays = screen.getAllDisplays();
   let targetDisplay = displays[0];
 
-  // Находим целевой дисплей
   if (sourceDisplayId !== undefined) {
     const foundDisplay = displays.find(display => display.id === sourceDisplayId);
     if (foundDisplay) {
@@ -38,12 +54,42 @@ async function captureScreenshot(areaData: any, sourceDisplayId?: number): Promi
     scaleFactor: targetDisplay.scaleFactor
   });
 
-  // Получаем скриншоты всех экранов
+  // DIP (overlay-local) → absolute DIP on the virtual desktop → physical screen pixels
+  const dipRect = {
+    x: targetDisplay.bounds.x + x,
+    y: targetDisplay.bounds.y + y,
+    width,
+    height
+  };
+  const physRect = screen.dipToScreenRect(null, dipRect);
+
+  console.log(`Physical capture rect:`, physRect);
+
+  if (process.platform === 'win32') {
+    try {
+      await hideOverlaysForCapture();
+      const png = captureRegionGdi(physRect.x, physRect.y, physRect.width, physRect.height);
+      console.log(`✅ GDI capture ${physRect.width}x${physRect.height}`);
+      return png;
+    } catch (err) {
+      console.warn('GDI capture failed, falling back to desktopCapturer:', err);
+    }
+  }
+
+  return captureScreenshotDesktopCapturer(areaData, targetDisplay);
+}
+
+async function captureScreenshotDesktopCapturer(
+  areaData: { x: number; y: number; width: number; height: number },
+  targetDisplay: Electron.Display
+): Promise<Buffer> {
+  const { x, y, width, height } = areaData;
+
   const sources = await desktopCapturer.getSources({
     types: ['screen'],
     thumbnailSize: {
-      width: targetDisplay.bounds.width * targetDisplay.scaleFactor,
-      height: targetDisplay.bounds.height * targetDisplay.scaleFactor
+      width: Math.round(targetDisplay.bounds.width * targetDisplay.scaleFactor),
+      height: Math.round(targetDisplay.bounds.height * targetDisplay.scaleFactor)
     }
   });
 
@@ -51,61 +97,40 @@ async function captureScreenshot(areaData: any, sourceDisplayId?: number): Promi
     throw new Error('No screens found');
   }
 
-  // Ищем скриншот для целевого дисплея
   let screenSource = sources.find(source => {
-    // Некоторые версии Electron используют display_id, некоторые - id
     const displayId = source.display_id || (source as any).id;
     return displayId === targetDisplay.id.toString();
   });
 
-  console.log(`Found ${sources.length} screen sources, looking for display ${targetDisplay.id}:`, screenSource ? 'found' : 'not found');
-
-  // Если не нашли по ID, используем первый доступный
   if (!screenSource) {
     screenSource = sources[0];
     console.log('Using first available screen source');
   }
-  
+
   if (!screenSource.thumbnail) {
     throw new Error('No thumbnail available');
   }
 
-  const fullScreenshot = nativeImage.createFromBuffer(screenSource.thumbnail.toPNG());
-  
-  // Корректируем координаты с учетом масштабирования
+  const fullScreenshot = screenSource.thumbnail;
   const scaleFactor = targetDisplay.scaleFactor;
   const adjustedX = Math.round(x * scaleFactor);
   const adjustedY = Math.round(y * scaleFactor);
   const adjustedWidth = Math.round(width * scaleFactor);
   const adjustedHeight = Math.round(height * scaleFactor);
 
-  console.log(`Adjusted coordinates with scale ${scaleFactor}:`, {
-    original: { x, y, width, height },
-    adjusted: { x: adjustedX, y: adjustedY, width: adjustedWidth, height: adjustedHeight }
-  });
-
-  // Проверяем, что область не выходит за границы изображения
   const screenshotSize = fullScreenshot.getSize();
-  console.log(`Screenshot size: ${screenshotSize.width}x${screenshotSize.height}`);
-
   const finalX = Math.max(0, Math.min(adjustedX, screenshotSize.width - 1));
   const finalY = Math.max(0, Math.min(adjustedY, screenshotSize.height - 1));
   const finalWidth = Math.max(1, Math.min(adjustedWidth, screenshotSize.width - finalX));
   const finalHeight = Math.max(1, Math.min(adjustedHeight, screenshotSize.height - finalY));
 
-  if (finalX !== adjustedX || finalY !== adjustedY || finalWidth !== adjustedWidth || finalHeight !== adjustedHeight) {
-    console.warn(`Adjusted crop area to fit within screenshot: ${finalX},${finalY} ${finalWidth}x${finalHeight}`);
-  }
-
   const croppedImage = fullScreenshot.crop({
     x: finalX,
-    y: finalY, 
+    y: finalY,
     width: finalWidth,
     height: finalHeight
   });
 
-  console.log(`✅ Successfully cropped image from selected display`);
-  
   return croppedImage.toPNG();
 }
 
@@ -335,14 +360,29 @@ async function saveOrUploadScreenshot(
     case 'ssh':
       result = await new SSHUploader().uploadFile(screenshotBuffer, fileName, settings);
       break;
+    case 'api':
+      result = await new ApiUploader().uploadFile(screenshotBuffer, fileName, settings);
+      break;
     default:
       throw new Error(`Unknown save method: ${settings.saveMethod}`);
   }
   const baseUrl = (settings.baseUrl || '').trim().replace(/\/$/, '') || 'https://vault.by';
-  const pathPart = result.startsWith('/') ? result : `/${result}`;
-  const fullUrl = `${baseUrl}${pathPart}`;
+  let fullUrl: string;
+  if (settings.saveMethod === 'api' && /^https?:\/\//i.test(result)) {
+    // API returns the public file URL
+    fullUrl = result;
+  } else if (settings.saveMethod === 'ssh' || settings.saveMethod === 'ftp') {
+    // Public URL is Base URL + filename (remote destinationPath is only for upload, not the link)
+    fullUrl = `${baseUrl}/${fileName}`;
+  } else {
+    const urlPath = result.startsWith('/') ? result : `/${result}`;
+    fullUrl = `${baseUrl}${urlPath}`;
+  }
   clipboard.writeText(fullUrl);
-  const methodLabel = settings.saveMethod === 's3' ? 'S3' : settings.saveMethod === 'ftp' ? 'FTP' : 'SSH';
+  const methodLabel =
+    settings.saveMethod === 's3' ? 'S3' :
+    settings.saveMethod === 'ftp' ? 'FTP' :
+    settings.saveMethod === 'api' ? 'API' : 'SSH';
   addToHistory({ method: methodLabel, urlOrPath: fullUrl });
   event.reply('upload-complete', { success: true, path: result, url: fullUrl });
   // Окна закроет renderer по получении upload-complete (send('close-all-windows'))
@@ -372,15 +412,15 @@ ipcMain.on('capture-area', async (event, areaData) => {
 
     if (watermarkEnabled || hasAnnotations) {
       pendingWatermark.set(event.sender.id, { saveLocally: !!areaData.saveLocally, fileName, settings });
-      const dataUrl = nativeImage.createFromBuffer(screenshotBuffer).toDataURL();
+      // Pass raw PNG bytes — avoid NativeImage → dataURL round-trip (color/profile loss)
       if (hasAnnotations) {
         event.reply('compose-image', {
-          dataUrl,
+          pngBuffer: screenshotBuffer,
           annotations: areaData.annotations,
           watermark: watermarkEnabled ? settings.watermark : null
         });
       } else {
-        event.reply('apply-watermark', { dataUrl, watermark: settings.watermark });
+        event.reply('apply-watermark', { pngBuffer: screenshotBuffer, watermark: settings.watermark });
       }
       return;
     }
@@ -405,12 +445,18 @@ ipcMain.on('capture-area', async (event, areaData) => {
   }
 });
 
-ipcMain.on('watermark-done', async (event, dataUrl: string) => {
+function asPngBuffer(payload: Buffer | Uint8Array | ArrayBuffer): Buffer {
+  if (Buffer.isBuffer(payload)) return payload;
+  if (payload instanceof ArrayBuffer) return Buffer.from(payload);
+  return Buffer.from(payload.buffer, payload.byteOffset, payload.byteLength);
+}
+
+ipcMain.on('watermark-done', async (event, pngPayload: Buffer | Uint8Array | ArrayBuffer) => {
   const pending = pendingWatermark.get(event.sender.id);
   pendingWatermark.delete(event.sender.id);
   if (!pending) return;
   try {
-    const buffer = nativeImage.createFromDataURL(dataUrl).toPNG();
+    const buffer = asPngBuffer(pngPayload);
     await saveOrUploadScreenshot(event, buffer, pending.fileName, pending.saveLocally, pending.settings);
   } catch (error) {
     console.error('Watermark save failed:', error);
@@ -429,12 +475,12 @@ ipcMain.on('watermark-error', (event, errorMessage: string) => {
   hideAllCaptureWindows();
 });
 
-ipcMain.on('compose-image-done', async (event, dataUrl: string) => {
+ipcMain.on('compose-image-done', async (event, pngPayload: Buffer | Uint8Array | ArrayBuffer) => {
   const pending = pendingWatermark.get(event.sender.id);
   pendingWatermark.delete(event.sender.id);
   if (!pending) return;
   try {
-    const buffer = nativeImage.createFromDataURL(dataUrl).toPNG();
+    const buffer = asPngBuffer(pngPayload);
     await saveOrUploadScreenshot(event, buffer, pending.fileName, pending.saveLocally, pending.settings);
   } catch (error) {
     console.error('Compose image save failed:', error);

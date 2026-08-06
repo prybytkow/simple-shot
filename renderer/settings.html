@@ -147,6 +147,7 @@
                 <option value="ssh">SSH (SFTP)</option>
                 <option value="ftp">FTP</option>
                 <option value="s3">Amazon S3</option>
+                <option value="api">HTTP API</option>
             </select>
         </div>
 
@@ -261,6 +262,21 @@
             </div>
         </div>
 
+        <!-- HTTP API Settings -->
+        <div id="api-section" class="method-section">
+            <div class="section-title" data-i18n="settings_apiTitle">HTTP API Settings</div>
+
+            <div class="form-group">
+                <label for="api-endpoint" data-i18n="settings_apiEndpoint">Upload endpoint:</label>
+                <input type="text" id="api-endpoint" placeholder="https://example.com/upload">
+            </div>
+
+            <div class="form-group">
+                <label for="api-key" data-i18n="settings_apiKey">API key:</label>
+                <input type="password" id="api-key" placeholder="your-api-key" autocomplete="off">
+            </div>
+        </div>
+
         <div class="section-title" data-i18n="settings_watermarkTitle">Watermark</div>
         <div class="form-group">
             <label>
@@ -309,6 +325,7 @@
         const sshSection = document.getElementById('ssh-section');
         const ftpSection = document.getElementById('ftp-section');
         const s3Section = document.getElementById('s3-section');
+        const apiSection = document.getElementById('api-section');
         const saveBtn = document.getElementById('save-btn');
         const cancelBtn = document.getElementById('cancel-btn');
 
@@ -317,9 +334,11 @@
             sshSection.classList.remove('active');
             ftpSection.classList.remove('active');
             s3Section.classList.remove('active');
+            apiSection.classList.remove('active');
             if (method === 'ssh') sshSection.classList.add('active');
             else if (method === 'ftp') ftpSection.classList.add('active');
             else if (method === 's3') s3Section.classList.add('active');
+            else if (method === 'api') apiSection.classList.add('active');
         }
 
         async function loadSettings() {
@@ -367,6 +386,10 @@
             document.getElementById('s3-region').value = settings.s3.region || 'us-east-1';
             document.getElementById('s3-endpoint').value = settings.s3.endpoint || '';
 
+            const api = settings.api || {};
+            document.getElementById('api-endpoint').value = api.endpoint || '';
+            document.getElementById('api-key').value = api.apiKey || '';
+
             const w = settings.watermark || {};
             document.getElementById('watermark-enabled').checked = w.enabled || false;
             document.getElementById('watermark-text').value = w.text || '';
@@ -405,6 +428,10 @@
                     bucket: document.getElementById('s3-bucket').value,
                     region: document.getElementById('s3-region').value,
                     endpoint: document.getElementById('s3-endpoint').value
+                },
+                api: {
+                    endpoint: document.getElementById('api-endpoint').value.trim(),
+                    apiKey: document.getElementById('api-key').value
                 },
                 watermark: {
                     enabled: document.getElementById('watermark-enabled').checked,
