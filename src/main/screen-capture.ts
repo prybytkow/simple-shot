@@ -9,7 +9,6 @@ import { ApiUploader } from './uploaders/api-uploader';
 
 import { loadSettings, getMainWindow } from './main';
 import { resolveLanguage } from './i18n';
-import { captureRegionGdi } from './gdi-capture';
 
 let overlayWindows: BrowserWindow[] = [];
 let activeWindow: BrowserWindow | null = null;
@@ -68,6 +67,7 @@ async function captureScreenshot(areaData: any, sourceDisplayId?: number): Promi
   if (process.platform === 'win32') {
     try {
       await hideOverlaysForCapture();
+      const { captureRegionGdi } = require('./gdi-capture');
       const png = captureRegionGdi(physRect.x, physRect.y, physRect.width, physRect.height);
       console.log(`✅ GDI capture ${physRect.width}x${physRect.height}`);
       return png;
@@ -143,15 +143,15 @@ export function setupScreenCapture(): void {
   const displays = screen.getAllDisplays();
   const settings = loadSettings();
   const lang = resolveLanguage(settings.language || 'system', app.getLocale());
-  
+
   // Создаем отдельное окно для каждого экрана
   displays.forEach((display, index) => {
     const scaleFactor = display.scaleFactor;
     // bounds в DIP (device-independent pixels) — размер окна задаём в DIP, без деления на scaleFactor
     const width = display.bounds.width;
     const height = display.bounds.height;
-    
-    
+
+
     const overlayWindow = new BrowserWindow({
       width: width,
       height: height,
@@ -180,7 +180,7 @@ export function setupScreenCapture(): void {
     // Передаем ID экрана и информацию о масштабировании в HTML
     const htmlPath = path.join(__dirname, '../renderer/capture-window.html');
     overlayWindow.loadFile(htmlPath, {
-      query: { 
+      query: {
         screenId: index.toString(),
         totalScreens: displays.length.toString(),
         scaleFactor: scaleFactor.toString(),
@@ -284,7 +284,7 @@ ipcMain.on('activate-single-window', (event, screenId) => {
   if (activeWindow) {
     console.log(`Active window display ID: ${(activeWindow as any).displayId}`);
   }
-  
+
   overlayWindows.forEach(win => {
     if (!win.isDestroyed()) {
       // Закрываем все окна кроме активированного
@@ -295,7 +295,7 @@ ipcMain.on('activate-single-window', (event, screenId) => {
       }
     }
   });
-  
+
   // Обновляем массив окон
   overlayWindows = overlayWindows.filter(win => !win.isDestroyed());
 });
@@ -390,7 +390,7 @@ async function saveOrUploadScreenshot(
 
 ipcMain.on('capture-area', async (event, areaData) => {
   const settings = loadSettings();
-  
+
   try {
     let sourceDisplayId: number | undefined;
     if (activeWindow) {
