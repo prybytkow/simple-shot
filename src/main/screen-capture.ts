@@ -1,4 +1,5 @@
 import { app, BrowserWindow, screen, ipcMain, desktopCapturer, clipboard, dialog } from 'electron';
+import { platform } from './capture-platform';
 import * as path from 'path';
 import * as fs from 'fs';
 import { addToHistory } from './history';
@@ -9,7 +10,6 @@ import { ApiUploader } from './uploaders/api-uploader';
 
 import { loadSettings, getMainWindow } from './main';
 import { resolveLanguage } from './i18n';
-import { captureRegionGdi } from './gdi-capture';
 
 let overlayWindows: BrowserWindow[] = [];
 let activeWindow: BrowserWindow | null = null;
@@ -29,6 +29,55 @@ async function hideOverlaysForCapture(): Promise<void> {
   }
   // Let the compositor drop the overlay from the desktop image
   await sleep(80);
+}
+
+async function restoreOverlaysAfterCapture(): Promise<void> {
+  if (platform.skipsOverlayRestore) return;
+  for (const win of overlayWindows) {
+    if (!win.isDestroyed()) {
+      win.setOpacity(1);
+      win.show();
+      win.setAlwaysOnTop(true);
+    }
+  }
+}
+
+function findScreenSource(
+  sources: Electron.DesktopCapturerSource[],
+  targetDisplay: Electron.Display,
+  displays: Electron.Display[]
+): Electron.DesktopCapturerSource {
+  let screenSource = sources.find(source => {
+    const displayId = source.display_id || (source as any).id;
+    return displayId === targetDisplay.id.toString();
+  });
+  if (screenSource) return screenSource;
+
+  screenSource = sources.find(source => {
+    if (!source.display_id) return false;
+    const capturerId = parseInt(source.display_id, 10);
+    if (Number.isNaN(capturerId)) return false;
+    const screenLow = Number(targetDisplay.id) & 0xffffffff;
+    return screenLow === capturerId || (screenLow >>> 0) === (capturerId >>> 0);
+  });
+  if (screenSource) return screenSource;
+
+  const displayIndex = displays.findIndex(d => d.id === targetDisplay.id);
+  if (displayIndex >= 0 && displayIndex < sources.length) {
+    return sources[displayIndex];
+  }
+
+  const expectedW = Math.round(targetDisplay.bounds.width * targetDisplay.scaleFactor);
+  const expectedH = Math.round(targetDisplay.bounds.height * targetDisplay.scaleFactor);
+  screenSource = sources.find(source => {
+    const size = source.thumbnail?.getSize();
+    if (!size) return false;
+    return Math.abs(size.width - expectedW) <= 2 && Math.abs(size.height - expectedH) <= 2;
+  });
+  if (screenSource) return screenSource;
+
+  console.log('Using first available screen source');
+  return sources[0];
 }
 
 async function captureScreenshot(areaData: any, sourceDisplayId?: number): Promise<Buffer> {
@@ -61,27 +110,47 @@ async function captureScreenshot(areaData: any, sourceDisplayId?: number): Promi
     width,
     height
   };
-  const physRect = screen.dipToScreenRect(null, dipRect);
 
-  console.log(`Physical capture rect:`, physRect);
-
-  if (process.platform === 'win32') {
-    try {
-      await hideOverlaysForCapture();
-      const png = captureRegionGdi(physRect.x, physRect.y, physRect.width, physRect.height);
-      console.log(`✅ GDI capture ${physRect.width}x${physRect.height}`);
-      return png;
-    } catch (err) {
-      console.warn('GDI capture failed, falling back to desktopCapturer:', err);
-    }
+  if (!platform.isLinux) {
+    await hideOverlaysForCapture();
+    const main = getMainWindow();
+    if (main && !main.isDestroyed()) main.hide();
   }
 
-  return captureScreenshotDesktopCapturer(areaData, targetDisplay);
+  try {
+    const linuxPng = await platform.captureIfLinux(areaData, targetDisplay, displays, () => {
+      const overlays = [...overlayWindows];
+      overlayWindows = [];
+      activeWindow = null;
+      return overlays;
+    });
+    if (linuxPng) return linuxPng;
+
+    if (process.platform === 'win32') {
+      try {
+        const { captureRegionGdi } = require('./gdi-capture');
+        const physRect = screen.dipToScreenRect(null, dipRect);
+
+        console.log(`Physical capture rect:`, physRect);
+        const png = captureRegionGdi(physRect.x, physRect.y, physRect.width, physRect.height);
+        console.log(`✅ GDI capture ${physRect.width}x${physRect.height}`);
+        return png;
+      } catch (err) {
+        console.warn('GDI capture failed, falling back to desktopCapturer:', err);
+      }
+    }
+
+    return await captureScreenshotDesktopCapturer(areaData, targetDisplay, displays);
+  } catch (err) {
+    await restoreOverlaysAfterCapture();
+    throw err;
+  }
 }
 
 async function captureScreenshotDesktopCapturer(
   areaData: { x: number; y: number; width: number; height: number },
-  targetDisplay: Electron.Display
+  targetDisplay: Electron.Display,
+  displays: Electron.Display[]
 ): Promise<Buffer> {
   const { x, y, width, height } = areaData;
 
@@ -97,15 +166,7 @@ async function captureScreenshotDesktopCapturer(
     throw new Error('No screens found');
   }
 
-  let screenSource = sources.find(source => {
-    const displayId = source.display_id || (source as any).id;
-    return displayId === targetDisplay.id.toString();
-  });
-
-  if (!screenSource) {
-    screenSource = sources[0];
-    console.log('Using first available screen source');
-  }
+  const screenSource = findScreenSource(sources, targetDisplay, displays);
 
   if (!screenSource.thumbnail) {
     throw new Error('No thumbnail available');
@@ -143,15 +204,15 @@ export function setupScreenCapture(): void {
   const displays = screen.getAllDisplays();
   const settings = loadSettings();
   const lang = resolveLanguage(settings.language || 'system', app.getLocale());
-  
+
   // Создаем отдельное окно для каждого экрана
   displays.forEach((display, index) => {
     const scaleFactor = display.scaleFactor;
     // bounds в DIP (device-independent pixels) — размер окна задаём в DIP, без деления на scaleFactor
     const width = display.bounds.width;
     const height = display.bounds.height;
-    
-    
+
+
     const overlayWindow = new BrowserWindow({
       width: width,
       height: height,
@@ -180,7 +241,7 @@ export function setupScreenCapture(): void {
     // Передаем ID экрана и информацию о масштабировании в HTML
     const htmlPath = path.join(__dirname, '../renderer/capture-window.html');
     overlayWindow.loadFile(htmlPath, {
-      query: { 
+      query: {
         screenId: index.toString(),
         totalScreens: displays.length.toString(),
         scaleFactor: scaleFactor.toString(),
@@ -262,20 +323,16 @@ function hideAllCaptureWindows(): void {
 
 // Функция для закрытия всех окон захвата (уничтожить — вызывается при новом захвате или ESC)
 export function closeAllCaptureWindows(): void {
-  overlayWindows.forEach(win => {
-    if (!win.isDestroyed()) {
-      win.close();
-    }
-  });
+  overlayWindows.forEach(win => platform.destroyCaptureWindow(win));
   overlayWindows = [];
-   activeWindow = null;
+  activeWindow = null;
 }
 
 // Обработчик для активации одного окна и закрытия остальных
 ipcMain.on('activate-single-window', (event, screenId) => {
   console.log(`Активируем окно ${screenId}, закрываем остальные`);
 
-   // Находим активируемое окно
+  // Находим активируемое окно
   activeWindow = overlayWindows.find(win => {
     const winUrl = win.webContents.getURL();
     return winUrl.includes(`screenId=${screenId}`);
@@ -284,18 +341,18 @@ ipcMain.on('activate-single-window', (event, screenId) => {
   if (activeWindow) {
     console.log(`Active window display ID: ${(activeWindow as any).displayId}`);
   }
-  
+
   overlayWindows.forEach(win => {
     if (!win.isDestroyed()) {
       // Закрываем все окна кроме активированного
       const winScreenId = win.webContents.getURL().includes(`screenId=${screenId}`);
     //  win.webContents.openDevTools();
       if (!winScreenId) {
-        win.close();
+        platform.destroyCaptureWindow(win);
       }
     }
   });
-  
+
   // Обновляем массив окон
   overlayWindows = overlayWindows.filter(win => !win.isDestroyed());
 });
@@ -315,8 +372,8 @@ async function saveOrUploadScreenshot(
 ): Promise<void> {
   if (saveLocally) {
     // Родитель диалога — скрытое окно, не окно захвата (иначе при закрытии окна захвата приложение может завершиться)
-    const parentWin = getMainWindow() ?? BrowserWindow.fromWebContents(event.sender);
-    if (!parentWin || parentWin.isDestroyed()) {
+    const parentWin = platform.getSaveDialogParent(event);
+    if (!platform.isSaveDialogParentValid(parentWin)) {
       event.reply('upload-complete', { success: false, error: 'Окно недоступно' });
       return;
     }
@@ -327,7 +384,7 @@ async function saveOrUploadScreenshot(
         win.setIgnoreMouseEvents(true, { forward: false });
       }
     });
-    const { canceled, filePath: savePath } = await dialog.showSaveDialog(parentWin, {
+    const { canceled, filePath: savePath } = await platform.showSaveDialog(parentWin, {
       defaultPath: fileName,
       filters: [{ name: 'PNG', extensions: ['png'] }]
     });
@@ -339,6 +396,7 @@ async function saveOrUploadScreenshot(
       }
     });
     if (canceled || !savePath) {
+      await restoreOverlaysAfterCapture();
       event.reply('upload-complete', { success: false, error: 'Отменено' });
       return;
     }
@@ -390,7 +448,7 @@ async function saveOrUploadScreenshot(
 
 ipcMain.on('capture-area', async (event, areaData) => {
   const settings = loadSettings();
-  
+
   try {
     let sourceDisplayId: number | undefined;
     if (activeWindow) {
@@ -411,16 +469,27 @@ ipcMain.on('capture-area', async (event, areaData) => {
     const hasAnnotations = areaData.annotations && Array.isArray(areaData.annotations) && areaData.annotations.length > 0;
 
     if (watermarkEnabled || hasAnnotations) {
-      pendingWatermark.set(event.sender.id, { saveLocally: !!areaData.saveLocally, fileName, settings });
-      // Pass raw PNG bytes — avoid NativeImage → dataURL round-trip (color/profile loss)
-      if (hasAnnotations) {
-        event.reply('compose-image', {
-          pngBuffer: screenshotBuffer,
-          annotations: areaData.annotations,
-          watermark: watermarkEnabled ? settings.watermark : null
-        });
+      const pending = { saveLocally: !!areaData.saveLocally, fileName, settings };
+      const senderId = await platform.watermarkSenderId(
+        hasAnnotations,
+        screenshotBuffer,
+        areaData.annotations,
+        watermarkEnabled ? settings.watermark : null
+      );
+      if (senderId === 'overlay') {
+        pendingWatermark.set(event.sender.id, pending);
+        // Pass raw PNG bytes — avoid NativeImage → dataURL round-trip (color/profile loss)
+        if (hasAnnotations) {
+          event.reply('compose-image', {
+            pngBuffer: screenshotBuffer,
+            annotations: areaData.annotations,
+            watermark: watermarkEnabled ? settings.watermark : null
+          });
+        } else {
+          event.reply('apply-watermark', { pngBuffer: screenshotBuffer, watermark: settings.watermark });
+        }
       } else {
-        event.reply('apply-watermark', { pngBuffer: screenshotBuffer, watermark: settings.watermark });
+        pendingWatermark.set(senderId, pending);
       }
       return;
     }
@@ -430,7 +499,7 @@ ipcMain.on('capture-area', async (event, areaData) => {
     console.error('Upload failed:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     event.reply('upload-complete', { success: false, error: errorMessage });
-    const win = BrowserWindow.fromWebContents(event.sender);
+    const win = BrowserWindow.fromWebContents(event.sender) ?? getMainWindow();
     if (win) {
       dialog.showMessageBox(win, {
         type: 'error',
