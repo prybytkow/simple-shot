@@ -4,44 +4,24 @@
     <meta charset="UTF-8">
     <title>Settings</title>
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: Arial, sans-serif;
+            font-family: Segoe UI, Arial, sans-serif;
             background: #f5f5f5;
             padding: 20px;
             color: #333;
         }
-        
         .container {
-            max-width: 550px;
+            max-width: 580px;
             margin: 0 auto;
             background: white;
             border-radius: 8px;
             padding: 20px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
-        
-        h1 {
-            text-align: center;
-            margin-bottom: 20px;
-            color: #2c3e50;
-        }
-        
-        .form-group {
-            margin-bottom: 15px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        
+        h1 { text-align: center; margin-bottom: 16px; color: #2c3e50; font-size: 22px; }
+        .form-group { margin-bottom: 14px; }
+        label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px; }
         input, select {
             width: 100%;
             padding: 8px 12px;
@@ -49,81 +29,91 @@
             border-radius: 4px;
             font-size: 14px;
         }
-        
-        input:focus, select:focus {
-            outline: none;
-            border-color: #3498db;
-        }
-        
+        input:focus, select:focus { outline: none; border-color: #3498db; }
         .method-section {
             display: none;
-            margin-top: 15px;
-            padding: 15px;
+            margin-top: 12px;
+            padding: 14px;
             background: #f8f9fa;
             border-radius: 4px;
             border-left: 4px solid #3498db;
         }
-        
-        .method-section.active {
-            display: block;
-        }
-        
-        .buttons {
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-            margin-top: 20px;
-        }
-        
+        .method-section.active { display: block; }
+        .buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; flex-wrap: wrap; }
         button {
-            padding: 10px 20px;
+            padding: 10px 16px;
             border: none;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 14px;
-            transition: background-color 0.2s;
+            font-size: 13px;
         }
-        
-        .btn-primary {
-            background: #3498db;
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            background: #2980b9;
-        }
-        
-        .btn-secondary {
-            background: #95a5a6;
-            color: white;
-        }
-        
-        .btn-secondary:hover {
-            background: #7f8c8d;
-        }
-        
+        .btn-primary { background: #3498db; color: white; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-secondary { background: #95a5a6; color: white; }
+        .btn-secondary:hover { background: #7f8c8d; }
+        .btn-danger { background: #e74c3c; color: white; }
+        .btn-danger:hover { background: #c0392b; }
+        .btn-small { padding: 6px 10px; font-size: 12px; }
         .section-title {
-            font-size: 16px;
+            font-size: 15px;
             font-weight: bold;
-            margin: 20px 0 10px 0;
+            margin: 18px 0 10px;
             padding-bottom: 5px;
             border-bottom: 2px solid #ecf0f1;
         }
-        
-        .row {
+        .row { display: flex; gap: 10px; }
+        .row .form-group { flex: 1; }
+        .profiles-bar {
             display: flex;
-            gap: 10px;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
         }
-        
-        .row .form-group {
-            flex: 1;
+        .profiles-bar select { flex: 1; min-width: 140px; }
+        .check-inline {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: normal;
+        }
+        .check-inline input { width: auto; }
+        .vault-box {
+            background: #eef6fc;
+            border: 1px solid #c5dff0;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 14px;
+            font-size: 13px;
+        }
+        .vault-box .status { margin-bottom: 8px; color: #2c3e50; }
+        .vault-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .secret-hint { font-size: 11px; color: #7f8c8d; margin-top: 4px; }
+        .active-badge {
+            font-size: 11px;
+            background: #27ae60;
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-left: 6px;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1 data-i18n="settings_saveTitle">Save Settings</h1>
-        
+
+        <div class="vault-box" id="vault-box">
+            <div class="status" id="vault-status-text"></div>
+            <div class="vault-actions">
+                <button type="button" class="btn-primary btn-small" id="vault-unlock-btn" data-i18n="vault_unlock">Unlock</button>
+                <button type="button" class="btn-primary btn-small" id="vault-setup-btn" data-i18n="vault_create">Create vault</button>
+                <button type="button" class="btn-secondary btn-small" id="vault-lock-btn" data-i18n="tray_lockVault">Lock vault</button>
+                <button type="button" class="btn-secondary btn-small" id="vault-change-btn" data-i18n="vault_change">Change password</button>
+                <button type="button" class="btn-danger btn-small" id="vault-reset-btn" data-i18n="vault_reset">Reset vault</button>
+            </div>
+        </div>
+
         <div class="form-group">
             <label for="language" data-i18n="settings_language">Language</label>
             <select id="language">
@@ -132,13 +122,48 @@
                 <option value="ru">Русский</option>
                 <option value="zh">中文</option>
                 <option value="pl">Polski</option>
-                <option value="uk">Українська</option>
-                <option value="be">Беларуская</option>
+                <option value="ua">Українська</option>
+                <option value="by">Беларуская</option>
                 <option value="it">Italiano</option>
                 <option value="es">Español</option>
                 <option value="pt">Português</option>
                 <option value="fr">Français</option>
             </select>
+        </div>
+
+        <div class="section-title" data-i18n="settings_afterUploadTitle">After upload</div>
+        <div class="form-group">
+            <label for="afterUploadFeedback" data-i18n="settings_afterUploadFeedback">Feedback after upload:</label>
+            <select id="afterUploadFeedback">
+                <option value="overlay" data-i18n="settings_feedbackOverlay">Toast on capture screen (auto-close)</option>
+                <option value="notification" data-i18n="settings_feedbackNotification">System notification only</option>
+                <option value="window" data-i18n="settings_feedbackWindow">Show link until closed</option>
+            </select>
+        </div>
+
+        <div class="section-title" data-i18n="settings_profilesTitle">Upload profiles</div>
+        <div class="profiles-bar">
+            <select id="profile-select"></select>
+            <button type="button" class="btn-secondary btn-small" id="profile-new-btn" data-i18n="settings_profileNew">New</button>
+            <button type="button" class="btn-secondary btn-small" id="profile-dup-btn" data-i18n="settings_profileDuplicate">Duplicate</button>
+            <button type="button" class="btn-danger btn-small" id="profile-del-btn" data-i18n="settings_profileDelete">Delete</button>
+        </div>
+
+        <div class="form-group">
+            <label for="profile-name" data-i18n="settings_profileName">Profile name</label>
+            <input type="text" id="profile-name" placeholder="decalgroup">
+        </div>
+        <div class="form-group">
+            <label class="check-inline">
+                <input type="checkbox" id="profile-show-tray">
+                <span data-i18n="settings_showInTray">Show in tray menu</span>
+            </label>
+        </div>
+        <div class="form-group">
+            <label class="check-inline">
+                <input type="checkbox" id="profile-active">
+                <span data-i18n="settings_setActive">Active profile for uploads</span>
+            </label>
         </div>
 
         <div class="form-group">
@@ -156,10 +181,8 @@
             <input type="text" id="baseUrl" placeholder="https://vault.by">
         </div>
 
-        <!-- SSH Settings -->
         <div id="ssh-section" class="method-section">
             <div class="section-title" data-i18n="settings_sshTitle">SSH Settings</div>
-            
             <div class="row">
                 <div class="form-group">
                     <label for="ssh-host" data-i18n="settings_host">Host:</label>
@@ -170,7 +193,6 @@
                     <input type="number" id="ssh-port" value="22">
                 </div>
             </div>
-            
             <div class="row">
                 <div class="form-group">
                     <label for="ssh-username" data-i18n="settings_username">Username:</label>
@@ -178,25 +200,22 @@
                 </div>
                 <div class="form-group">
                     <label for="ssh-password" data-i18n="settings_password">Password:</label>
-                    <input type="password" id="ssh-password" placeholder="Пароль">
+                    <input type="password" id="ssh-password" placeholder="" autocomplete="off">
+                    <div class="secret-hint" id="ssh-password-hint"></div>
                 </div>
             </div>
-            
             <div class="form-group">
                 <label for="ssh-privateKey" data-i18n="settings_privateKeyPath">Private key path:</label>
                 <input type="text" id="ssh-privateKey" placeholder="/path/to/private/key">
             </div>
-            
             <div class="form-group">
                 <label for="ssh-destination" data-i18n="settings_destinationPath">Destination path:</label>
-                <input type="text" id="ssh-destination" placeholder="/home/user/uploads" value="/uploads">
+                <input type="text" id="ssh-destination" placeholder="/uploads" value="/uploads">
             </div>
         </div>
 
-        <!-- FTP Settings -->
         <div id="ftp-section" class="method-section">
             <div class="section-title" data-i18n="settings_ftpTitle">FTP Settings</div>
-            
             <div class="row">
                 <div class="form-group">
                     <label for="ftp-host" data-i18n="settings_host">Host:</label>
@@ -207,7 +226,6 @@
                     <input type="number" id="ftp-port" value="21">
                 </div>
             </div>
-            
             <div class="row">
                 <div class="form-group">
                     <label for="ftp-username" data-i18n="settings_username">Username:</label>
@@ -215,77 +233,72 @@
                 </div>
                 <div class="form-group">
                     <label for="ftp-password" data-i18n="settings_password">Password:</label>
-                    <input type="password" id="ftp-password" placeholder="Пароль">
+                    <input type="password" id="ftp-password" autocomplete="off">
+                    <div class="secret-hint" id="ftp-password-hint"></div>
                 </div>
             </div>
-            
             <div class="form-group">
                 <label for="ftp-destination" data-i18n="settings_destinationPath">Destination path:</label>
                 <input type="text" id="ftp-destination" placeholder="/uploads" value="/uploads">
             </div>
-            
             <div class="form-group">
-                <label>
-                    <input type="checkbox" id="ftp-secure"> <span data-i18n="settings_secureFtp">Secure connection (FTPS)</span>
+                <label class="check-inline">
+                    <input type="checkbox" id="ftp-secure">
+                    <span data-i18n="settings_secureFtp">Secure connection (FTPS)</span>
                 </label>
             </div>
         </div>
 
-        <!-- S3 Settings -->
         <div id="s3-section" class="method-section">
             <div class="section-title" data-i18n="settings_s3Title">Amazon S3 Settings</div>
-            
             <div class="form-group">
                 <label for="s3-accessKey" data-i18n="settings_accessKeyId">Access Key ID:</label>
-                <input type="text" id="s3-accessKey" placeholder="AKIAIOSFODNN7EXAMPLE">
+                <input type="text" id="s3-accessKey" placeholder="AKIA…">
             </div>
-            
             <div class="form-group">
                 <label for="s3-secretKey" data-i18n="settings_secretKey">Secret Access Key:</label>
-                <input type="password" id="s3-secretKey" placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY">
+                <input type="password" id="s3-secretKey" autocomplete="off">
+                <div class="secret-hint" id="s3-secret-hint"></div>
             </div>
-            
             <div class="row">
                 <div class="form-group">
                     <label for="s3-bucket" data-i18n="settings_bucket">Bucket:</label>
-                    <input type="text" id="s3-bucket" placeholder="my-bucket">
+                    <input type="text" id="s3-bucket">
                 </div>
                 <div class="form-group">
                     <label for="s3-region" data-i18n="settings_region">Region:</label>
-                    <input type="text" id="s3-region" placeholder="us-east-1" value="us-east-1">
+                    <input type="text" id="s3-region" value="us-east-1">
                 </div>
             </div>
-            
             <div class="form-group">
                 <label for="s3-endpoint" data-i18n="settings_endpointOptional">Endpoint (optional):</label>
-                <input type="text" id="s3-endpoint" placeholder="https://s3.us-east-1.amazonaws.com">
+                <input type="text" id="s3-endpoint">
             </div>
         </div>
 
-        <!-- HTTP API Settings -->
         <div id="api-section" class="method-section">
             <div class="section-title" data-i18n="settings_apiTitle">HTTP API Settings</div>
-
             <div class="form-group">
                 <label for="api-endpoint" data-i18n="settings_apiEndpoint">Upload endpoint:</label>
                 <input type="text" id="api-endpoint" placeholder="https://example.com/upload">
             </div>
-
             <div class="form-group">
                 <label for="api-key" data-i18n="settings_apiKey">API key:</label>
-                <input type="password" id="api-key" placeholder="your-api-key" autocomplete="off">
+                <input type="password" id="api-key" autocomplete="off">
+                <div class="secret-hint" id="api-key-hint"></div>
             </div>
         </div>
 
         <div class="section-title" data-i18n="settings_watermarkTitle">Watermark</div>
         <div class="form-group">
-            <label>
-                <input type="checkbox" id="watermark-enabled"> <span data-i18n="settings_watermarkEnabled">Enable watermark on saved screenshots</span>
+            <label class="check-inline">
+                <input type="checkbox" id="watermark-enabled">
+                <span data-i18n="settings_watermarkEnabled">Enable watermark on saved screenshots</span>
             </label>
         </div>
         <div class="form-group">
             <label for="watermark-text" data-i18n="settings_watermarkText">Watermark text:</label>
-            <input type="text" id="watermark-text" placeholder="e.g. Confidential">
+            <input type="text" id="watermark-text">
         </div>
         <div class="form-group">
             <label for="watermark-position" data-i18n="settings_position">Position:</label>
@@ -304,12 +317,12 @@
             </div>
             <div class="form-group">
                 <label for="watermark-color" data-i18n="settings_color">Color:</label>
-                <input type="color" id="watermark-color" value="#ffffff" title="Color">
+                <input type="color" id="watermark-color" value="#ffffff">
             </div>
         </div>
         <div class="form-group">
             <label for="watermark-opacity" data-i18n="settings_opacity">Opacity (0–1):</label>
-            <input type="number" id="watermark-opacity" min="0" max="1" step="0.1" value="0.5" title="Watermark opacity">
+            <input type="number" id="watermark-opacity" min="0" max="1" step="0.1" value="0.5">
         </div>
 
         <div class="buttons">
@@ -321,74 +334,176 @@
     <script>
         const { ipcRenderer } = require('electron');
 
+        let t = {};
+        let profiles = [];
+        let activeProfileId = '';
+        let currentProfileId = '';
+        let secretFlags = {};
+        let vault = { hasVault: false, isUnlocked: false, needsSetup: false };
+        /** Draft secrets typed in UI (not yet saved) */
+        let secretDrafts = {};
+
         const saveMethodSelect = document.getElementById('saveMethod');
         const sshSection = document.getElementById('ssh-section');
         const ftpSection = document.getElementById('ftp-section');
         const s3Section = document.getElementById('s3-section');
         const apiSection = document.getElementById('api-section');
-        const saveBtn = document.getElementById('save-btn');
-        const cancelBtn = document.getElementById('cancel-btn');
+
+        function applyTranslations() {
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const k = el.getAttribute('data-i18n');
+                if (t && k && t[k]) el.textContent = t[k];
+            });
+            if (t.settings_title) document.title = t.settings_title;
+        }
 
         function updateVisibleSection() {
             const method = saveMethodSelect.value;
-            sshSection.classList.remove('active');
-            ftpSection.classList.remove('active');
-            s3Section.classList.remove('active');
-            apiSection.classList.remove('active');
+            [sshSection, ftpSection, s3Section, apiSection].forEach(s => s.classList.remove('active'));
             if (method === 'ssh') sshSection.classList.add('active');
             else if (method === 'ftp') ftpSection.classList.add('active');
             else if (method === 's3') s3Section.classList.add('active');
             else if (method === 'api') apiSection.classList.add('active');
         }
 
-        async function loadSettings() {
-            try {
-                const settings = await ipcRenderer.invoke('get-settings');
-                populateForm(settings);
-                const t = await ipcRenderer.invoke('get-translations', settings.language || 'system');
-                applyTranslations(t);
-                if (document.title !== undefined) document.title = t.settings_title || document.title;
-            } catch (error) {
-                console.error('Error loading settings:', error);
+        function updateVaultUi() {
+            const statusEl = document.getElementById('vault-status-text');
+            let text = t.vault_statusNone || 'No vault — set a master password to encrypt upload credentials.';
+            if (vault.hasVault && vault.isUnlocked) text = t.vault_statusUnlocked || 'Vault unlocked — secrets available.';
+            else if (vault.hasVault) text = t.vault_statusLocked || 'Vault locked — unlock to edit or use secrets.';
+            else if (vault.needsSetup) text = t.vault_statusNeedsSetup || 'Secrets pending — create a master password to encrypt them.';
+            statusEl.textContent = text;
+
+            document.getElementById('vault-unlock-btn').style.display = vault.hasVault && !vault.isUnlocked ? '' : 'none';
+            document.getElementById('vault-setup-btn').style.display = !vault.hasVault ? '' : 'none';
+            document.getElementById('vault-lock-btn').style.display = vault.hasVault && vault.isUnlocked ? '' : 'none';
+            document.getElementById('vault-change-btn').style.display = vault.hasVault && vault.isUnlocked ? '' : 'none';
+            document.getElementById('vault-reset-btn').style.display = vault.hasVault ? '' : 'none';
+        }
+
+        function secretHint(set) {
+            if (!set) return '';
+            return t.vault_secretKept || 'Saved (leave blank to keep)';
+        }
+
+        function refreshProfileSelect() {
+            const sel = document.getElementById('profile-select');
+            sel.innerHTML = '';
+            profiles.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.name + (p.id === activeProfileId ? ' ★' : '');
+                sel.appendChild(opt);
+            });
+            if (currentProfileId) sel.value = currentProfileId;
+        }
+
+        function readFormIntoCurrentProfile() {
+            const p = profiles.find(x => x.id === currentProfileId);
+            if (!p) return;
+            p.name = (document.getElementById('profile-name').value || '').trim() || p.name;
+            p.showInTray = document.getElementById('profile-show-tray').checked;
+            p.saveMethod = saveMethodSelect.value;
+            p.baseUrl = document.getElementById('baseUrl').value.trim() || 'https://mysite.com';
+            p.ssh = {
+                host: document.getElementById('ssh-host').value,
+                port: parseInt(document.getElementById('ssh-port').value, 10) || 22,
+                username: document.getElementById('ssh-username').value,
+                privateKeyPath: document.getElementById('ssh-privateKey').value,
+                destinationPath: document.getElementById('ssh-destination').value
+            };
+            p.ftp = {
+                host: document.getElementById('ftp-host').value,
+                port: parseInt(document.getElementById('ftp-port').value, 10) || 21,
+                username: document.getElementById('ftp-username').value,
+                destinationPath: document.getElementById('ftp-destination').value,
+                secure: document.getElementById('ftp-secure').checked
+            };
+            p.s3 = {
+                accessKeyId: document.getElementById('s3-accessKey').value,
+                bucket: document.getElementById('s3-bucket').value,
+                region: document.getElementById('s3-region').value,
+                endpoint: document.getElementById('s3-endpoint').value
+            };
+            p.api = { endpoint: document.getElementById('api-endpoint').value.trim() };
+
+            if (!secretDrafts[p.id]) secretDrafts[p.id] = {};
+            secretDrafts[p.id].sshPassword = document.getElementById('ssh-password').value;
+            secretDrafts[p.id].ftpPassword = document.getElementById('ftp-password').value;
+            secretDrafts[p.id].s3SecretAccessKey = document.getElementById('s3-secretKey').value;
+            secretDrafts[p.id].apiKey = document.getElementById('api-key').value;
+
+            if (document.getElementById('profile-active').checked) {
+                activeProfileId = p.id;
             }
         }
 
-        function applyTranslations(t) {
-            document.querySelectorAll('[data-i18n]').forEach(el => {
-                const k = el.getAttribute('data-i18n');
-                if (t && k && t[k]) el.textContent = t[k];
-            });
+        function fillFormFromProfile(p) {
+            if (!p) return;
+            currentProfileId = p.id;
+            document.getElementById('profile-name').value = p.name || '';
+            document.getElementById('profile-show-tray').checked = p.showInTray !== false;
+            document.getElementById('profile-active').checked = p.id === activeProfileId;
+            saveMethodSelect.value = p.saveMethod || 'ssh';
+            document.getElementById('baseUrl').value = p.baseUrl || '';
+
+            document.getElementById('ssh-host').value = (p.ssh && p.ssh.host) || '';
+            document.getElementById('ssh-port').value = (p.ssh && p.ssh.port) || 22;
+            document.getElementById('ssh-username').value = (p.ssh && p.ssh.username) || '';
+            document.getElementById('ssh-privateKey').value = (p.ssh && p.ssh.privateKeyPath) || '';
+            document.getElementById('ssh-destination').value = (p.ssh && p.ssh.destinationPath) || '/uploads';
+            document.getElementById('ssh-password').value = (secretDrafts[p.id] && secretDrafts[p.id].sshPassword) || '';
+
+            document.getElementById('ftp-host').value = (p.ftp && p.ftp.host) || '';
+            document.getElementById('ftp-port').value = (p.ftp && p.ftp.port) || 21;
+            document.getElementById('ftp-username').value = (p.ftp && p.ftp.username) || '';
+            document.getElementById('ftp-destination').value = (p.ftp && p.ftp.destinationPath) || '/uploads';
+            document.getElementById('ftp-secure').checked = !!(p.ftp && p.ftp.secure);
+            document.getElementById('ftp-password').value = (secretDrafts[p.id] && secretDrafts[p.id].ftpPassword) || '';
+
+            document.getElementById('s3-accessKey').value = (p.s3 && p.s3.accessKeyId) || '';
+            document.getElementById('s3-bucket').value = (p.s3 && p.s3.bucket) || '';
+            document.getElementById('s3-region').value = (p.s3 && p.s3.region) || 'us-east-1';
+            document.getElementById('s3-endpoint').value = (p.s3 && p.s3.endpoint) || '';
+            document.getElementById('s3-secretKey').value = (secretDrafts[p.id] && secretDrafts[p.id].s3SecretAccessKey) || '';
+
+            document.getElementById('api-endpoint').value = (p.api && p.api.endpoint) || '';
+            document.getElementById('api-key').value = (secretDrafts[p.id] && secretDrafts[p.id].apiKey) || '';
+
+            const flags = secretFlags[p.id] || {};
+            document.getElementById('ssh-password-hint').textContent = secretHint(flags.sshPasswordSet);
+            document.getElementById('ftp-password-hint').textContent = secretHint(flags.ftpPasswordSet);
+            document.getElementById('s3-secret-hint').textContent = secretHint(flags.s3SecretSet);
+            document.getElementById('api-key-hint').textContent = secretHint(flags.apiKeySet);
+
+            updateVisibleSection();
+            refreshProfileSelect();
         }
 
-        function populateForm(settings) {
+        function switchProfile(id) {
+            readFormIntoCurrentProfile();
+            const p = profiles.find(x => x.id === id);
+            if (p) fillFormFromProfile(p);
+        }
+
+        async function loadAll() {
+            const settings = await ipcRenderer.invoke('get-settings');
+            t = await ipcRenderer.invoke('get-translations', settings.language || 'system') || {};
+            applyTranslations();
+
+            profiles = (settings.profiles || []).slice();
+            activeProfileId = settings.activeProfileId || (profiles[0] && profiles[0].id) || '';
+            secretFlags = settings.secretFlags || {};
+            vault = settings.vault || vault;
+            secretDrafts = {};
+
             const langSelect = document.getElementById('language');
-            if (langSelect) langSelect.value = (settings.language === undefined || settings.language === null) ? 'system' : settings.language;
-            saveMethodSelect.value = settings.saveMethod;
-            document.getElementById('baseUrl').value = settings.baseUrl || 'https://vault.by';
+            const lang = settings.language == null ? 'system' : settings.language;
+            langSelect.value = lang === 'be' ? 'by' : lang === 'uk' ? 'ua' : lang;
 
-            document.getElementById('ssh-host').value = settings.ssh.host || '';
-            document.getElementById('ssh-port').value = settings.ssh.port || 22;
-            document.getElementById('ssh-username').value = settings.ssh.username || '';
-            document.getElementById('ssh-password').value = settings.ssh.password || '';
-            document.getElementById('ssh-privateKey').value = settings.ssh.privateKeyPath || '';
-            document.getElementById('ssh-destination').value = settings.ssh.destinationPath || '/uploads';
-
-            document.getElementById('ftp-host').value = settings.ftp.host || '';
-            document.getElementById('ftp-port').value = settings.ftp.port || 21;
-            document.getElementById('ftp-username').value = settings.ftp.username || '';
-            document.getElementById('ftp-password').value = settings.ftp.password || '';
-            document.getElementById('ftp-destination').value = settings.ftp.destinationPath || '/uploads';
-            document.getElementById('ftp-secure').checked = settings.ftp.secure || false;
-
-            document.getElementById('s3-accessKey').value = settings.s3.accessKeyId || '';
-            document.getElementById('s3-secretKey').value = settings.s3.secretAccessKey || '';
-            document.getElementById('s3-bucket').value = settings.s3.bucket || '';
-            document.getElementById('s3-region').value = settings.s3.region || 'us-east-1';
-            document.getElementById('s3-endpoint').value = settings.s3.endpoint || '';
-
-            const api = settings.api || {};
-            document.getElementById('api-endpoint').value = api.endpoint || '';
-            document.getElementById('api-key').value = api.apiKey || '';
+            const feedback = settings.afterUploadFeedback;
+            document.getElementById('afterUploadFeedback').value =
+                (feedback === 'notification' || feedback === 'window') ? feedback : 'overlay';
 
             const w = settings.watermark || {};
             document.getElementById('watermark-enabled').checked = w.enabled || false;
@@ -398,66 +513,134 @@
             document.getElementById('watermark-color').value = w.color || '#ffffff';
             document.getElementById('watermark-opacity').value = w.opacity != null ? w.opacity : 0.5;
 
-            updateVisibleSection();
+            updateVaultUi();
+            const first = profiles.find(p => p.id === activeProfileId) || profiles[0];
+            if (first) fillFormFromProfile(first);
+            else {
+                const empty = await ipcRenderer.invoke('create-empty-profile', 'Default');
+                profiles = [empty];
+                activeProfileId = empty.id;
+                fillFormFromProfile(empty);
+            }
         }
 
-        async function saveSettings() {
-            const settings = {
-                saveMethod: saveMethodSelect.value,
-                baseUrl: document.getElementById('baseUrl').value.trim() || 'https://vault.by',
-                language: (document.getElementById('language') || {}).value || 'system',
-                ssh: {
-                    host: document.getElementById('ssh-host').value,
-                    port: parseInt(document.getElementById('ssh-port').value) || 22,
-                    username: document.getElementById('ssh-username').value,
-                    password: document.getElementById('ssh-password').value,
-                    privateKeyPath: document.getElementById('ssh-privateKey').value,
-                    destinationPath: document.getElementById('ssh-destination').value
-                },
-                ftp: {
-                    host: document.getElementById('ftp-host').value,
-                    port: parseInt(document.getElementById('ftp-port').value) || 21,
-                    username: document.getElementById('ftp-username').value,
-                    password: document.getElementById('ftp-password').value,
-                    destinationPath: document.getElementById('ftp-destination').value,
-                    secure: document.getElementById('ftp-secure').checked
-                },
-                s3: {
-                    accessKeyId: document.getElementById('s3-accessKey').value,
-                    secretAccessKey: document.getElementById('s3-secretKey').value,
-                    bucket: document.getElementById('s3-bucket').value,
-                    region: document.getElementById('s3-region').value,
-                    endpoint: document.getElementById('s3-endpoint').value
-                },
-                api: {
-                    endpoint: document.getElementById('api-endpoint').value.trim(),
-                    apiKey: document.getElementById('api-key').value
-                },
+        async function saveAll() {
+            readFormIntoCurrentProfile();
+            const secretsByProfile = {};
+            profiles.forEach(p => {
+                const d = secretDrafts[p.id] || {};
+                secretsByProfile[p.id] = {
+                    sshPassword: d.sshPassword || '',
+                    ftpPassword: d.ftpPassword || '',
+                    s3SecretAccessKey: d.s3SecretAccessKey || '',
+                    apiKey: d.apiKey || ''
+                };
+            });
+
+            const payload = {
+                language: document.getElementById('language').value || 'system',
+                afterUploadFeedback: document.getElementById('afterUploadFeedback').value || 'overlay',
+                activeProfileId,
+                profiles,
+                secretsByProfile,
                 watermark: {
                     enabled: document.getElementById('watermark-enabled').checked,
                     text: document.getElementById('watermark-text').value.trim(),
                     position: document.getElementById('watermark-position').value,
-                    fontSize: parseInt(document.getElementById('watermark-fontSize').value) || 24,
+                    fontSize: parseInt(document.getElementById('watermark-fontSize').value, 10) || 24,
                     color: document.getElementById('watermark-color').value || '#ffffff',
-                    opacity: (() => { const v = parseFloat(document.getElementById('watermark-opacity').value); return Number.isFinite(v) ? v : 0.5; })()
+                    opacity: (() => {
+                        const v = parseFloat(document.getElementById('watermark-opacity').value);
+                        return Number.isFinite(v) ? v : 0.5;
+                    })()
                 }
             };
 
             try {
-                await ipcRenderer.invoke('save-settings', settings);
-                window.close();
-            } catch (error) {
-                console.error('Error saving settings:', error);
-                const t = await ipcRenderer.invoke('get-translations', 'en').catch(() => ({}));
+                const result = await ipcRenderer.invoke('save-settings', payload);
+                if (!result || !result.ok) {
+                    if (result && result.error === 'locked') {
+                        alert(t.vault_errLocked || 'Unlock the vault first');
+                        ipcRenderer.invoke('show-vault-window', 'unlock');
+                        return;
+                    }
+                    alert(t.settings_errorSaving || 'Error saving settings');
+                    return;
+                }
+                // If needs vault setup, unlock window is shown by main; keep settings open
+                if (!result.needsVaultSetup) {
+                    window.close();
+                } else {
+                    await loadAll();
+                }
+            } catch (e) {
+                console.error(e);
                 alert(t.settings_errorSaving || 'Error saving settings');
             }
         }
 
-        saveMethodSelect.addEventListener('change', updateVisibleSection);
-        saveBtn.addEventListener('click', saveSettings);
-        cancelBtn.addEventListener('click', () => window.close());
+        document.getElementById('profile-select').addEventListener('change', (e) => {
+            switchProfile(e.target.value);
+        });
+        document.getElementById('profile-new-btn').onclick = async () => {
+            readFormIntoCurrentProfile();
+            const name = prompt(t.settings_profileNamePrompt || 'Profile name', 'New profile');
+            if (name == null) return;
+            const p = await ipcRenderer.invoke('create-empty-profile', name.trim() || 'New profile');
+            profiles.push(p);
+            secretDrafts[p.id] = {};
+            fillFormFromProfile(p);
+        };
+        document.getElementById('profile-dup-btn').onclick = async () => {
+            readFormIntoCurrentProfile();
+            const src = profiles.find(x => x.id === currentProfileId);
+            if (!src) return;
+            const p = await ipcRenderer.invoke('create-empty-profile', (src.name || 'Profile') + ' copy');
+            p.saveMethod = src.saveMethod;
+            p.baseUrl = src.baseUrl;
+            p.showInTray = src.showInTray;
+            p.ssh = { ...src.ssh };
+            p.ftp = { ...src.ftp };
+            p.s3 = { ...src.s3 };
+            p.api = { ...src.api };
+            profiles.push(p);
+            secretDrafts[p.id] = {};
+            fillFormFromProfile(p);
+        };
+        document.getElementById('profile-del-btn').onclick = () => {
+            if (profiles.length <= 1) {
+                alert(t.settings_profileKeepOne || 'Keep at least one profile');
+                return;
+            }
+            readFormIntoCurrentProfile();
+            const idx = profiles.findIndex(x => x.id === currentProfileId);
+            if (idx < 0) return;
+            const removedId = profiles[idx].id;
+            profiles.splice(idx, 1);
+            delete secretDrafts[removedId];
+            if (activeProfileId === removedId) activeProfileId = profiles[0].id;
+            fillFormFromProfile(profiles[Math.max(0, idx - 1)] || profiles[0]);
+        };
 
-        document.addEventListener('DOMContentLoaded', loadSettings);
+        saveMethodSelect.addEventListener('change', updateVisibleSection);
+        document.getElementById('save-btn').onclick = () => saveAll();
+        document.getElementById('cancel-btn').onclick = () => window.close();
+
+        document.getElementById('vault-unlock-btn').onclick = () => ipcRenderer.invoke('show-vault-window', 'unlock');
+        document.getElementById('vault-setup-btn').onclick = () => ipcRenderer.invoke('show-vault-window', 'setup');
+        document.getElementById('vault-change-btn').onclick = () => ipcRenderer.invoke('show-vault-window', 'change');
+        document.getElementById('vault-lock-btn').onclick = async () => {
+            await ipcRenderer.invoke('vault-lock');
+            await loadAll();
+        };
+        document.getElementById('vault-reset-btn').onclick = async () => {
+            if (!confirm(t.vault_resetConfirm || 'Delete encrypted secrets? You will need to re-enter passwords.')) return;
+            await ipcRenderer.invoke('vault-reset');
+            await loadAll();
+        };
+
+        ipcRenderer.on('vault-updated', () => loadAll());
+        document.addEventListener('DOMContentLoaded', loadAll);
     </script>
 </body>
 </html>

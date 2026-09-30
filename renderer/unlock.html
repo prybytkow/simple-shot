@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Vault</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: Segoe UI, Arial, sans-serif;
+            background: #f0f2f5;
+            color: #2c3e50;
+            padding: 24px;
+        }
+        h1 { font-size: 18px; margin-bottom: 8px; }
+        .hint { font-size: 12px; color: #7f8c8d; margin-bottom: 16px; line-height: 1.4; }
+        .form-group { margin-bottom: 12px; }
+        label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+        input[type="password"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ccd1d5;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        input:focus { outline: none; border-color: #3498db; }
+        .error {
+            display: none;
+            color: #c0392b;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+        .error.visible { display: block; }
+        .buttons { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+        button {
+            padding: 9px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .btn-primary { background: #3498db; color: #fff; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-secondary { background: #95a5a6; color: #fff; }
+        .btn-secondary:hover { background: #7f8c8d; }
+    </style>
+</head>
+<body>
+    <h1 id="title">Unlock vault</h1>
+    <p class="hint" id="hint"></p>
+    <div class="error" id="error"></div>
+
+    <div class="form-group" id="old-group" style="display:none">
+        <label for="old-password" data-i18n="vault_currentPassword">Current password</label>
+        <input type="password" id="old-password" autocomplete="current-password">
+    </div>
+    <div class="form-group">
+        <label for="password" id="password-label" data-i18n="vault_password">Master password</label>
+        <input type="password" id="password" autocomplete="new-password">
+    </div>
+    <div class="form-group" id="confirm-group" style="display:none">
+        <label for="confirm" data-i18n="vault_confirmPassword">Confirm password</label>
+        <input type="password" id="confirm" autocomplete="new-password">
+    </div>
+
+    <div class="buttons">
+        <button type="button" class="btn-secondary" id="cancel-btn" data-i18n="settings_cancel">Cancel</button>
+        <button type="button" class="btn-primary" id="ok-btn" data-i18n="vault_unlock">Unlock</button>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+        const params = new URLSearchParams(window.location.search);
+        const mode = params.get('mode') || 'unlock';
+        const lang = params.get('lang') || 'system';
+        let t = {};
+
+        function showError(msg) {
+            const el = document.getElementById('error');
+            el.textContent = msg || '';
+            el.classList.toggle('visible', !!msg);
+        }
+
+        function applyUi() {
+            const title = document.getElementById('title');
+            const hint = document.getElementById('hint');
+            const okBtn = document.getElementById('ok-btn');
+            const oldGroup = document.getElementById('old-group');
+            const confirmGroup = document.getElementById('confirm-group');
+
+            if (mode === 'setup') {
+                title.textContent = t.vault_setupTitle || 'Set master password';
+                hint.textContent = t.vault_setupHint || 'Passwords for SSH/FTP/S3/API are encrypted with this password (same on Windows, macOS, and Linux).';
+                okBtn.textContent = t.vault_create || 'Create vault';
+                confirmGroup.style.display = 'block';
+                document.getElementById('password').autocomplete = 'new-password';
+            } else if (mode === 'change') {
+                title.textContent = t.vault_changeTitle || 'Change master password';
+                hint.textContent = t.vault_changeHint || 'Enter current and new master password.';
+                okBtn.textContent = t.vault_change || 'Change';
+                oldGroup.style.display = 'block';
+                confirmGroup.style.display = 'block';
+            } else {
+                title.textContent = t.vault_unlockTitle || 'Unlock vault';
+                hint.textContent = t.vault_unlockHint || 'Enter your master password to use upload credentials.';
+                okBtn.textContent = t.vault_unlock || 'Unlock';
+                document.getElementById('password').autocomplete = 'current-password';
+            }
+            document.title = title.textContent;
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const k = el.getAttribute('data-i18n');
+                if (t[k]) el.textContent = t[k];
+            });
+        }
+
+        async function submit() {
+            showError('');
+            const password = document.getElementById('password').value;
+            const confirm = document.getElementById('confirm').value;
+            const oldPassword = document.getElementById('old-password').value;
+
+            if (mode === 'setup' || mode === 'change') {
+                if (!password || password.length < 4) {
+                    showError(t.vault_errWeak || 'Password must be at least 4 characters');
+                    return;
+                }
+                if (password !== confirm) {
+                    showError(t.vault_errMismatch || 'Passwords do not match');
+                    return;
+                }
+            }
+            if (mode === 'unlock' && !password) {
+                showError(t.vault_errRequired || 'Password is required');
+                return;
+            }
+
+            let result;
+            if (mode === 'setup') {
+                result = await ipcRenderer.invoke('vault-setup', password);
+            } else if (mode === 'change') {
+                result = await ipcRenderer.invoke('vault-change-password', oldPassword, password);
+            } else {
+                result = await ipcRenderer.invoke('vault-unlock', password);
+            }
+
+            if (!result || !result.ok) {
+                const map = {
+                    bad_password: t.vault_errBadPassword || 'Wrong password',
+                    weak_password: t.vault_errWeak || 'Password must be at least 4 characters',
+                    already_exists: t.vault_errExists || 'Vault already exists',
+                    no_vault: t.vault_errNoVault || 'No vault',
+                    encrypt_failed: t.vault_errEncrypt || 'Encryption failed'
+                };
+                showError(map[result && result.error] || (t.vault_errGeneric || 'Failed'));
+                return;
+            }
+            await ipcRenderer.invoke('close-unlock-window');
+        }
+
+        document.getElementById('ok-btn').onclick = () => submit();
+        document.getElementById('cancel-btn').onclick = () => ipcRenderer.invoke('close-unlock-window');
+        document.getElementById('password').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') submit();
+        });
+        document.getElementById('confirm').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') submit();
+        });
+
+        ipcRenderer.invoke('get-translations', lang).then((tr) => {
+            t = tr || {};
+            applyUi();
+        }).catch(() => applyUi());
+    </script>
+</body>
+</html>

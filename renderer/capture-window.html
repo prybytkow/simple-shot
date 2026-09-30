@@ -342,6 +342,119 @@
             pointer-events: none;
         }
 
+        #upload-status {
+            display: none;
+            position: absolute;
+            inset: 0;
+            z-index: 5000;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.45);
+            pointer-events: auto;
+            cursor: default;
+        }
+        #upload-status.visible {
+            display: flex;
+        }
+        .upload-status-card {
+            width: min(340px, 90vw);
+            padding: 28px 24px 22px;
+            border-radius: 12px;
+            background: rgba(28, 30, 34, 0.94);
+            color: #f2f2f2;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+            font-family: Segoe UI, Arial, sans-serif;
+        }
+        .upload-spinner {
+            width: 36px;
+            height: 36px;
+            margin: 0 auto 16px;
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #5dade2;
+            border-radius: 50%;
+            animation: upload-spin 0.8s linear infinite;
+        }
+        @keyframes upload-spin {
+            to { transform: rotate(360deg); }
+        }
+        .upload-icon {
+            display: none;
+            width: 40px;
+            height: 40px;
+            margin: 0 auto 14px;
+            border-radius: 50%;
+            line-height: 40px;
+            font-size: 22px;
+            font-weight: bold;
+        }
+        .upload-icon.success {
+            background: #27ae60;
+            color: #fff;
+        }
+        .upload-icon.error {
+            background: #c0392b;
+            color: #fff;
+        }
+        .upload-status-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .upload-status-url {
+            display: none;
+            font-size: 12px;
+            color: #a8c5d8;
+            word-break: break-all;
+            line-height: 1.4;
+            margin: 10px 0 4px;
+            padding: 8px 10px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.06);
+            cursor: pointer;
+        }
+        .upload-status-url:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #d6eaf8;
+        }
+        .upload-status-hint {
+            display: none;
+            font-size: 11px;
+            color: #888;
+            margin-top: 4px;
+        }
+        .upload-status-error {
+            display: none;
+            font-size: 12px;
+            color: #f5b7b1;
+            margin-top: 8px;
+            word-break: break-word;
+        }
+        .upload-status-actions {
+            display: none;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 16px;
+        }
+        .upload-status-actions.visible {
+            display: flex;
+        }
+        .upload-status-actions button {
+            border: none;
+            border-radius: 6px;
+            padding: 8px 14px;
+            font-size: 13px;
+            cursor: pointer;
+            background: #3498db;
+            color: #fff;
+        }
+        .upload-status-actions button.secondary {
+            background: #5d6d7e;
+        }
+        .upload-status-actions button:hover {
+            filter: brightness(1.08);
+        }
+
         #screen-info {
             position: absolute;
             top: 20px;
@@ -372,6 +485,20 @@
             <div class="resize-handle resize-sw"></div>
         </div>
         <div id="toolbar"></div>
+        <div id="upload-status" aria-live="polite">
+            <div class="upload-status-card">
+                <div class="upload-spinner" id="upload-spinner"></div>
+                <div class="upload-icon" id="upload-icon"></div>
+                <div class="upload-status-title" id="upload-status-title"></div>
+                <div class="upload-status-url" id="upload-status-url" title=""></div>
+                <div class="upload-status-hint" id="upload-status-hint"></div>
+                <div class="upload-status-error" id="upload-status-error"></div>
+                <div class="upload-status-actions" id="upload-status-actions">
+                    <button type="button" id="upload-copy-btn" data-i18n="history_copy">Copy</button>
+                    <button type="button" class="secondary" id="upload-close-btn" data-i18n="capture_closeBtn">Close</button>
+                </div>
+            </div>
+        </div>
         <div id="crop-popup">
             <div id="crop-panel">
                 <h3 data-i18n="capture_aspectRatio">Aspect ratio</h3>
@@ -1922,34 +2049,6 @@
         document.getElementById('undo-btn').onclick = () => restoreState();
         
         // Добавляем обработчики для кнопок
-        const { ipcRenderer } = require('electron');
-        ipcRenderer.on('upload-complete', (event, { success }) => {
-            document.body.classList.remove('capture-hide-ui');
-            const toolbar = document.getElementById('toolbar');
-            if (toolbar && !success) {
-                toolbar.style.visibility = '';
-                toolbar.style.display = 'block';
-            }
-            if (success) closeAllWindows();
-        });
-        function sendCaptureArea(saveLocally) {
-            const x = parseInt(selectionArea.style.left, 10) || 0;
-            const y = parseInt(selectionArea.style.top, 10) || 0;
-            const width = parseInt(selectionArea.style.width, 10) || 0;
-            const height = parseInt(selectionArea.style.height, 10) || 0;
-            if (width < 10 || height < 10) return;
-            document.body.classList.add('capture-hide-ui');
-            const toolbar = document.getElementById('toolbar');
-            if (toolbar) {
-                toolbar.style.visibility = 'hidden';
-            }
-            ipcRenderer.send('capture-area', {
-                x: x, y: y, width: width, height: height,
-                screenId: screenId,
-                saveLocally: !!saveLocally,
-                annotations: JSON.parse(JSON.stringify(annotationList || []))
-            });
-        }
         document.getElementById('save-btn').onclick = () => sendCaptureArea(true);
         document.getElementById('save-to-server-btn').onclick = () => sendCaptureArea(false);
         
@@ -2147,6 +2246,206 @@
     toolbar.style.display = 'block';
     resizeAnnotationCanvas();
 }
+
+        let uploadBusy = false;
+        let uploadSuccessTimer = null;
+        let lastUploadUrl = '';
+        let uploadHandlersReady = false;
+
+        function tStr(key, fallback) {
+            return (window.__t && window.__t[key]) || fallback;
+        }
+
+        function shortenUrl(url, maxLen) {
+            const str = String(url || '');
+            const limit = maxLen || 52;
+            if (str.length <= limit) return str;
+            const keep = Math.floor((limit - 1) / 2);
+            return str.slice(0, keep) + '…' + str.slice(-keep);
+        }
+
+        function hideUploadStatus() {
+            const el = document.getElementById('upload-status');
+            if (el) el.classList.remove('visible');
+            uploadBusy = false;
+            if (uploadSuccessTimer) {
+                clearTimeout(uploadSuccessTimer);
+                uploadSuccessTimer = null;
+            }
+        }
+
+        function showUploadStatus(state, opts) {
+            opts = opts || {};
+            const root = document.getElementById('upload-status');
+            const spinner = document.getElementById('upload-spinner');
+            const icon = document.getElementById('upload-icon');
+            const title = document.getElementById('upload-status-title');
+            const urlEl = document.getElementById('upload-status-url');
+            const hint = document.getElementById('upload-status-hint');
+            const errEl = document.getElementById('upload-status-error');
+            const actions = document.getElementById('upload-status-actions');
+            if (!root) return;
+
+            root.classList.add('visible');
+            spinner.style.display = state === 'uploading' ? 'block' : 'none';
+            icon.style.display = state === 'success' || state === 'error' ? 'block' : 'none';
+            icon.className = 'upload-icon' + (state === 'success' ? ' success' : state === 'error' ? ' error' : '');
+            icon.textContent = state === 'success' ? '✓' : state === 'error' ? '!' : '';
+
+            if (state === 'uploading') {
+                uploadBusy = true;
+                title.textContent = tStr('capture_uploading', 'Uploading…');
+                urlEl.style.display = 'none';
+                hint.style.display = 'none';
+                errEl.style.display = 'none';
+                actions.classList.remove('visible');
+            } else if (state === 'success') {
+                uploadBusy = false;
+                lastUploadUrl = opts.url || '';
+                title.textContent = tStr('capture_linkCopied', 'Link copied');
+                if (lastUploadUrl) {
+                    urlEl.style.display = 'block';
+                    urlEl.textContent = shortenUrl(lastUploadUrl);
+                    urlEl.title = lastUploadUrl;
+                    hint.style.display = 'block';
+                    hint.textContent = tStr('capture_clickToCopy', 'Click to copy again');
+                } else {
+                    urlEl.style.display = 'none';
+                    hint.style.display = 'none';
+                }
+                errEl.style.display = 'none';
+                if (opts.keepOpen) actions.classList.add('visible');
+                else actions.classList.remove('visible');
+            } else {
+                uploadBusy = false;
+                title.textContent = tStr('capture_uploadFailed', 'Upload failed');
+                urlEl.style.display = 'none';
+                hint.style.display = 'none';
+                errEl.style.display = 'block';
+                errEl.textContent = opts.error || '';
+                actions.classList.add('visible');
+                const copyBtn = document.getElementById('upload-copy-btn');
+                if (copyBtn) copyBtn.style.display = 'none';
+            }
+            if (state !== 'error') {
+                const copyBtn = document.getElementById('upload-copy-btn');
+                if (copyBtn) copyBtn.style.display = '';
+            }
+        }
+
+        function copyUploadUrlAgain() {
+            if (!lastUploadUrl) return;
+            const { ipcRenderer } = require('electron');
+            const done = () => {
+                const hint = document.getElementById('upload-status-hint');
+                if (hint) {
+                    hint.style.display = 'block';
+                    hint.textContent = tStr('capture_copiedAgain', 'Copied');
+                }
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(lastUploadUrl).then(done).catch(() => {
+                    ipcRenderer.send('copy-text', lastUploadUrl);
+                    done();
+                });
+            } else {
+                ipcRenderer.send('copy-text', lastUploadUrl);
+                done();
+            }
+        }
+
+        function sendCaptureArea(saveLocally) {
+            const { ipcRenderer } = require('electron');
+            const x = parseInt(selectionArea.style.left, 10) || 0;
+            const y = parseInt(selectionArea.style.top, 10) || 0;
+            const width = parseInt(selectionArea.style.width, 10) || 0;
+            const height = parseInt(selectionArea.style.height, 10) || 0;
+            if (width < 10 || height < 10) return;
+            document.body.classList.add('capture-hide-ui');
+            const tb = document.getElementById('toolbar');
+            if (tb) tb.style.visibility = 'hidden';
+            if (!saveLocally) showUploadStatus('uploading');
+            else hideUploadStatus();
+            ipcRenderer.send('capture-area', {
+                x: x, y: y, width: width, height: height,
+                screenId: screenId,
+                saveLocally: !!saveLocally,
+                annotations: JSON.parse(JSON.stringify(annotationList || []))
+            });
+        }
+
+        function setupUploadStatusHandlers() {
+            if (uploadHandlersReady) return;
+            uploadHandlersReady = true;
+            const { ipcRenderer } = require('electron');
+            const copyBtn = document.getElementById('upload-copy-btn');
+            const closeBtn = document.getElementById('upload-close-btn');
+            const urlEl = document.getElementById('upload-status-url');
+            if (copyBtn) copyBtn.onclick = () => copyUploadUrlAgain();
+            if (closeBtn) closeBtn.onclick = () => {
+                const icon = document.getElementById('upload-icon');
+                const isError = icon && icon.classList.contains('error');
+                hideUploadStatus();
+                if (isError) {
+                    document.body.classList.remove('capture-hide-ui');
+                    const tb = document.getElementById('toolbar');
+                    if (tb) {
+                        tb.style.visibility = '';
+                        tb.style.display = 'block';
+                    }
+                    return;
+                }
+                closeAllWindows();
+            };
+            if (urlEl) urlEl.onclick = () => copyUploadUrlAgain();
+
+            ipcRenderer.on('upload-complete', (event, payload) => {
+                const success = !!(payload && payload.success);
+                const saveLocally = !!(payload && payload.saveLocally);
+                const feedback = (payload && payload.feedback) || 'overlay';
+                const url = (payload && payload.url) || '';
+                const error = (payload && payload.error) || '';
+
+                document.body.classList.remove('capture-hide-ui');
+                const tb = document.getElementById('toolbar');
+
+                if (saveLocally) {
+                    hideUploadStatus();
+                    if (tb && !success) {
+                        tb.style.visibility = '';
+                        tb.style.display = 'block';
+                    }
+                    if (success) closeAllWindows();
+                    return;
+                }
+
+                if (!success) {
+                    showUploadStatus('error', { error: error });
+                    if (tb) tb.style.visibility = 'hidden';
+                    return;
+                }
+
+                if (feedback === 'notification') {
+                    hideUploadStatus();
+                    closeAllWindows();
+                    return;
+                }
+
+                if (feedback === 'window') {
+                    showUploadStatus('success', { url: url, keepOpen: true });
+                    return;
+                }
+
+                showUploadStatus('success', { url: url, keepOpen: false });
+                if (uploadSuccessTimer) clearTimeout(uploadSuccessTimer);
+                uploadSuccessTimer = setTimeout(() => {
+                    hideUploadStatus();
+                    closeAllWindows();
+                }, 1800);
+            });
+        }
+        setupUploadStatusHandlers();
+
         // Функция закрытия всех окон
         function closeAllWindows() {
             const { ipcRenderer } = require('electron');
@@ -2156,6 +2455,13 @@
         // Закрытие по ESC
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
+                if (uploadBusy) return;
+                const status = document.getElementById('upload-status');
+                if (status && status.classList.contains('visible')) {
+                    hideUploadStatus();
+                    closeAllWindows();
+                    return;
+                }
                 closeAllWindows();
             }
         });

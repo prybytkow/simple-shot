@@ -1,4 +1,4 @@
-import { app, BrowserWindow, screen, ipcMain, desktopCapturer, clipboard, dialog } from 'electron';
+import { app, BrowserWindow, screen, ipcMain, desktopCapturer, clipboard, dialog, Notification, shell, nativeImage } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { addToHistory } from './history';
@@ -7,9 +7,59 @@ import { FTPUploader } from './uploaders/ftp-uploader';
 import { SSHUploader } from './uploaders/ssh-uploader';
 import { ApiUploader } from './uploaders/api-uploader';
 
-import { loadSettings, getMainWindow } from './main';
-import { resolveLanguage } from './i18n';
+import { loadSettings, getMainWindow, ensureVaultUnlockedForUpload } from './main';
+import { getRuntimeUploadSettings, loadAppSettings } from './settings-store';
+import { resolveLanguage, getTranslations } from './i18n';
 import { captureRegionGdi } from './gdi-capture';
+
+type AfterUploadFeedback = 'overlay' | 'notification' | 'window';
+
+function getAfterUploadFeedback(settings?: { afterUploadFeedback?: string }): AfterUploadFeedback {
+  const f = settings?.afterUploadFeedback ?? loadAppSettings().afterUploadFeedback;
+  if (f === 'notification' || f === 'window') return f;
+  return 'overlay';
+}
+
+function showUploadNotification(url: string): void {
+  if (!Notification.isSupported()) return;
+  const settings = loadAppSettings();
+  const lang = resolveLanguage(settings.language || 'system', app.getLocale());
+  const t = getTranslations(lang);
+  const iconPath = path.join(__dirname, 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png');
+  const icon = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : undefined;
+  const n = new Notification({
+    title: t.notify_linkCopiedTitle || 'Link copied',
+    body: url,
+    icon: icon && !icon.isEmpty() ? icon : undefined,
+    silent: false
+  });
+  n.on('click', () => {
+    shell.openExternal(url).catch(() => {});
+  });
+  n.show();
+}
+
+function replyUploadComplete(
+  event: Electron.IpcMainEvent,
+  payload: {
+    success: boolean;
+    path?: string;
+    url?: string;
+    error?: string;
+    saveLocally: boolean;
+  },
+  settings?: { afterUploadFeedback?: string }
+): void {
+  const feedback = getAfterUploadFeedback(settings);
+  event.reply('upload-complete', { ...payload, feedback });
+  if (payload.success && !payload.saveLocally && payload.url && feedback === 'notification') {
+    showUploadNotification(payload.url);
+  }
+}
+
+ipcMain.on('copy-text', (_event, text: string) => {
+  if (typeof text === 'string' && text) clipboard.writeText(text);
+});
 
 let overlayWindows: BrowserWindow[] = [];
 let activeWindow: BrowserWindow | null = null;
@@ -317,7 +367,7 @@ async function saveOrUploadScreenshot(
     // Родитель диалога — скрытое окно, не окно захвата (иначе при закрытии окна захвата приложение может завершиться)
     const parentWin = getMainWindow() ?? BrowserWindow.fromWebContents(event.sender);
     if (!parentWin || parentWin.isDestroyed()) {
-      event.reply('upload-complete', { success: false, error: 'Окно недоступно' });
+      replyUploadComplete(event, { success: false, error: 'Окно недоступно', saveLocally: true }, settings);
       return;
     }
     // Окна захвата поверх всех (alwaysOnTop) — диалог уходит под них. Временно убираем поверх всех и игнорируем мышь.
@@ -339,13 +389,13 @@ async function saveOrUploadScreenshot(
       }
     });
     if (canceled || !savePath) {
-      event.reply('upload-complete', { success: false, error: 'Отменено' });
+      replyUploadComplete(event, { success: false, error: 'Отменено', saveLocally: true }, settings);
       return;
     }
     fs.writeFileSync(savePath, screenshotBuffer);
     clipboard.writeText(savePath);
     addToHistory({ method: 'Локально', urlOrPath: savePath });
-    event.reply('upload-complete', { success: true, path: savePath, url: savePath });
+    replyUploadComplete(event, { success: true, path: savePath, url: savePath, saveLocally: true }, settings);
     // Окна закроет renderer по получении upload-complete (send('close-all-windows'))
     return;
   }
@@ -384,12 +434,37 @@ async function saveOrUploadScreenshot(
     settings.saveMethod === 'ftp' ? 'FTP' :
     settings.saveMethod === 'api' ? 'API' : 'SSH';
   addToHistory({ method: methodLabel, urlOrPath: fullUrl });
-  event.reply('upload-complete', { success: true, path: result, url: fullUrl });
+  replyUploadComplete(event, { success: true, path: result, url: fullUrl, saveLocally: false }, settings);
   // Окна закроет renderer по получении upload-complete (send('close-all-windows'))
 }
 
 ipcMain.on('capture-area', async (event, areaData) => {
-  const settings = loadSettings();
+  if (!areaData?.saveLocally) {
+    const runtime = getRuntimeUploadSettings();
+    if ('error' in runtime && runtime.error === 'locked') {
+      ensureVaultUnlockedForUpload();
+      const appS = loadAppSettings();
+      const lang = resolveLanguage(appS.language || 'system', app.getLocale());
+      const tr = getTranslations(lang);
+      replyUploadComplete(event, {
+        success: false,
+        error: tr.vault_errLocked || 'Unlock the vault first',
+        saveLocally: false
+      });
+      return;
+    }
+  }
+
+  const settings = (() => {
+    if (areaData?.saveLocally) {
+      return loadSettings();
+    }
+    const runtime = getRuntimeUploadSettings();
+    if ('error' in runtime) {
+      return loadSettings();
+    }
+    return runtime;
+  })();
   
   try {
     let sourceDisplayId: number | undefined;
@@ -429,19 +504,11 @@ ipcMain.on('capture-area', async (event, areaData) => {
   } catch (error) {
     console.error('Upload failed:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    event.reply('upload-complete', { success: false, error: errorMessage });
-    const win = BrowserWindow.fromWebContents(event.sender);
-    if (win) {
-      dialog.showMessageBox(win, {
-        type: 'error',
-        title: 'Ошибка загрузки',
-        message: errorMessage
-      }).then(() => {
-        hideAllCaptureWindows();
-      });
-    } else {
-      hideAllCaptureWindows();
-    }
+    replyUploadComplete(event, {
+      success: false,
+      error: errorMessage,
+      saveLocally: !!(areaData && areaData.saveLocally)
+    }, settings);
   }
 });
 
@@ -461,8 +528,11 @@ ipcMain.on('watermark-done', async (event, pngPayload: Buffer | Uint8Array | Arr
   } catch (error) {
     console.error('Watermark save failed:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    event.reply('upload-complete', { success: false, error: errorMessage });
-    hideAllCaptureWindows();
+    replyUploadComplete(event, {
+      success: false,
+      error: errorMessage,
+      saveLocally: pending.saveLocally
+    }, pending.settings);
   }
 });
 
@@ -470,9 +540,14 @@ ipcMain.on('watermark-error', (event, errorMessage: string) => {
   const pending = pendingWatermark.get(event.sender.id);
   pendingWatermark.delete(event.sender.id);
   if (pending) {
-    event.reply('upload-complete', { success: false, error: errorMessage || 'Ошибка наложения водяного знака' });
+    replyUploadComplete(event, {
+      success: false,
+      error: errorMessage || 'Ошибка наложения водяного знака',
+      saveLocally: pending.saveLocally
+    }, pending.settings);
+  } else {
+    hideAllCaptureWindows();
   }
-  hideAllCaptureWindows();
 });
 
 ipcMain.on('compose-image-done', async (event, pngPayload: Buffer | Uint8Array | ArrayBuffer) => {
@@ -485,8 +560,11 @@ ipcMain.on('compose-image-done', async (event, pngPayload: Buffer | Uint8Array |
   } catch (error) {
     console.error('Compose image save failed:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    event.reply('upload-complete', { success: false, error: errorMessage });
-    hideAllCaptureWindows();
+    replyUploadComplete(event, {
+      success: false,
+      error: errorMessage,
+      saveLocally: pending.saveLocally
+    }, pending.settings);
   }
 });
 
@@ -494,7 +572,12 @@ ipcMain.on('compose-image-error', (event, errorMessage: string) => {
   const pending = pendingWatermark.get(event.sender.id);
   pendingWatermark.delete(event.sender.id);
   if (pending) {
-    event.reply('upload-complete', { success: false, error: errorMessage || 'Ошибка композиции изображения' });
+    replyUploadComplete(event, {
+      success: false,
+      error: errorMessage || 'Ошибка композиции изображения',
+      saveLocally: pending.saveLocally
+    }, pending.settings);
+  } else {
+    hideAllCaptureWindows();
   }
-  hideAllCaptureWindows();
 });
