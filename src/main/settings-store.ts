@@ -1,5 +1,7 @@
 /**
- * Settings store: named upload profiles + encrypted secrets vault.
+ * Settings store: named upload profiles + encrypted vault.
+ * When a vault exists, settings.json on disk contains only the ciphertext.
+ * Profiles, hosts, and secrets stay in memory after unlock.
  */
 import { app } from 'electron';
 import * as path from 'path';
@@ -264,14 +266,86 @@ function stripAccidentalSecrets(profile: UploadProfile): UploadProfile {
   return { ...profile, ssh, ftp, s3, api };
 }
 
-function persist(settings: AppSettings): void {
-  const toWrite: AppSettings = {
-    ...settings,
-    profiles: settings.profiles.map(stripAccidentalSecrets),
-    vault: settings.vault
+/** Ciphertext version: whole config (profiles + secrets), not passwords alone. */
+const CONFIG_VERSION = 2;
+
+interface VaultConfigPayload {
+  version: typeof CONFIG_VERSION;
+  language?: string;
+  afterUploadFeedback?: AfterUploadFeedback;
+  watermark?: AppSettings['watermark'];
+  activeProfileId: string;
+  profiles: UploadProfile[];
+  secrets: SecretsPayload;
+}
+
+/** Plaintext from an older settings.json, merged in on the next successful unlock. */
+let legacySettings: AppSettings | null = null;
+/** Vault exists and this session has not unlocked it. Profiles are not kept in memory. */
+let vaultLocked = false;
+/** Config changed or loaded from plaintext and still needs a master password. */
+let pendingPlaintext = false;
+/** Parsed file was unreadable — refuse to overwrite it. */
+let loadFailed = false;
+
+function lockedShell(vault: VaultBlob | null): AppSettings {
+  return {
+    language: '',
+    afterUploadFeedback: 'overlay',
+    watermark: defaultWatermark(),
+    activeProfileId: '',
+    profiles: [],
+    vault
   };
-  fs.writeFileSync(settingsPath(), JSON.stringify(toWrite, null, 2), 'utf8');
-  cached = settings;
+}
+
+function isConfigPayload(raw: unknown): raw is VaultConfigPayload {
+  if (!raw || typeof raw !== 'object') return false;
+  const o = raw as Partial<VaultConfigPayload>;
+  return o.version === CONFIG_VERSION && Array.isArray(o.profiles) && !!o.secrets && typeof o.secrets === 'object';
+}
+
+function isLegacySecretsMap(raw: unknown): raw is SecretsPayload {
+  return !!raw && typeof raw === 'object' && !Array.isArray(raw) && !isConfigPayload(raw);
+}
+
+/** On disk: only the vault blob. Profiles are never written in the clear. */
+function writeDisk(vault: VaultBlob | null): void {
+  if (loadFailed) return;
+  fs.writeFileSync(settingsPath(), JSON.stringify({ vault }, null, 2), 'utf8');
+}
+
+function settingsFromParsed(parsed: any): AppSettings {
+  const defaults = defaultAppSettings();
+  let profiles: UploadProfile[] = Array.isArray(parsed.profiles)
+    ? parsed.profiles.map((pr: any, i: number) => normalizeProfile(pr, i === 0 ? 'Default' : `Profile ${i + 1}`))
+    : [];
+  if (profiles.length === 0) profiles = defaults.profiles;
+
+  let activeProfileId = parsed.activeProfileId;
+  if (!profiles.some((pr) => pr.id === activeProfileId)) {
+    activeProfileId = profiles[0].id;
+  }
+
+  return {
+    language: parsed.language ?? '',
+    afterUploadFeedback:
+      parsed.afterUploadFeedback === 'notification' || parsed.afterUploadFeedback === 'window'
+        ? parsed.afterUploadFeedback
+        : 'overlay',
+    watermark: { ...defaultWatermark(), ...(parsed.watermark || {}) },
+    activeProfileId,
+    profiles,
+    vault: null
+  };
+}
+
+function fileHasPlaintextConfig(parsed: any): boolean {
+  if (Array.isArray(parsed.profiles) && parsed.profiles.length > 0) return true;
+  if (parsed.ssh || parsed.ftp || parsed.s3 || parsed.api || parsed.saveMethod) return true;
+  if (parsed.watermark || parsed.activeProfileId || parsed.afterUploadFeedback) return true;
+  if (typeof parsed.language === 'string' && parsed.language.length > 0) return true;
+  return false;
 }
 
 export function loadAppSettings(): AppSettings {
@@ -281,53 +355,59 @@ export function loadAppSettings(): AppSettings {
     const p = settingsPath();
     if (!fs.existsSync(p)) {
       cached = defaults;
-      persist(defaults);
+      writeDisk(null);
       return cached;
     }
     const parsed = JSON.parse(fs.readFileSync(p, 'utf8')) as any;
+    const vault: VaultBlob | null = parsed.vault && typeof parsed.vault === 'object' ? parsed.vault : null;
+
     if (isLegacySettings(parsed)) {
       const { settings, secrets } = migrateLegacy(parsed);
-      // Keep migrated secrets in memory until user creates a vault
-      if (Object.keys(secrets).length > 0) {
-        unlockedSecrets = secrets;
-        masterPasswordSession = null;
-      }
-      persist(settings);
+      settings.vault = vault;
+      if (Object.keys(secrets).length > 0) unlockedSecrets = secrets;
+      else unlockedSecrets = {};
+      pendingPlaintext = true;
       cached = settings;
       return settings;
     }
 
-    let profiles: UploadProfile[] = Array.isArray(parsed.profiles)
-      ? parsed.profiles.map((pr: any, i: number) => normalizeProfile(pr, i === 0 ? 'Default' : `Profile ${i + 1}`))
-      : [];
-    if (profiles.length === 0) profiles = defaults.profiles;
-
-    let activeProfileId = parsed.activeProfileId;
-    if (!profiles.some((pr) => pr.id === activeProfileId)) {
-      activeProfileId = profiles[0].id;
+    if (vault && fileHasPlaintextConfig(parsed)) {
+      // Old file: passwords in the vault, profiles still in the clear.
+      // Hide profiles until unlock, then fold them into the ciphertext.
+      legacySettings = settingsFromParsed(parsed);
+      vaultLocked = true;
+      unlockedSecrets = null;
+      masterPasswordSession = null;
+      cached = lockedShell(vault);
+      return cached;
     }
 
-    const settings: AppSettings = {
-      language: parsed.language ?? '',
-      afterUploadFeedback:
-        parsed.afterUploadFeedback === 'notification' || parsed.afterUploadFeedback === 'window'
-          ? parsed.afterUploadFeedback
-          : 'overlay',
-      watermark: { ...defaultWatermark(), ...(parsed.watermark || {}) },
-      activeProfileId,
-      profiles,
-      vault: parsed.vault && typeof parsed.vault === 'object' ? parsed.vault : null
-    };
-    cached = settings;
-    return settings;
+    if (vault) {
+      vaultLocked = true;
+      unlockedSecrets = null;
+      masterPasswordSession = null;
+      cached = lockedShell(vault);
+      return cached;
+    }
+
+    if (fileHasPlaintextConfig(parsed)) {
+      unlockedSecrets = {};
+      pendingPlaintext = true;
+      cached = settingsFromParsed(parsed);
+      return cached;
+    }
+
+    cached = defaults;
+    return cached;
   } catch (e) {
     console.error('Error loading settings:', e);
+    loadFailed = true;
     cached = defaults;
     return defaults;
   }
 }
 
-export function saveAppSettings( partial: {
+export function saveAppSettings(partial: {
   language?: string;
   afterUploadFeedback?: AfterUploadFeedback;
   watermark?: AppSettings['watermark'];
@@ -335,6 +415,7 @@ export function saveAppSettings( partial: {
   profiles?: UploadProfile[];
 }): AppSettings {
   const current = loadAppSettings();
+  if (vaultLocked) return current;
   const next: AppSettings = {
     ...current,
     language: partial.language !== undefined ? partial.language : current.language,
@@ -352,90 +433,180 @@ export function saveAppSettings( partial: {
       : current.profiles,
     vault: current.vault
   };
-  if (!next.profiles.some((p) => p.id === next.activeProfileId)) {
-    next.activeProfileId = next.profiles[0]?.id || createEmptyProfile('Default').id;
+  if (!next.profiles.some((p) => p.id === next.activeProfileId) && next.profiles.length > 0) {
+    next.activeProfileId = next.profiles[0].id;
   }
-  persist(next);
+  cached = next;
+  if (next.vault && masterPasswordSession && unlockedSecrets) {
+    persistEncrypted();
+  } else if (!next.vault) {
+    pendingPlaintext = true;
+  }
   return next;
 }
 
 export function setActiveProfile(id: string): boolean {
   const s = loadAppSettings();
+  if (vaultLocked) return false;
   if (!s.profiles.some((p) => p.id === id)) return false;
   s.activeProfileId = id;
-  persist(s);
+  cached = s;
+  if (s.vault && masterPasswordSession && unlockedSecrets) persistEncrypted();
   return true;
 }
 
-export function getActiveProfile(): UploadProfile {
+export function getActiveProfile(): UploadProfile | undefined {
   const s = loadAppSettings();
+  if (s.profiles.length === 0) return undefined;
   return s.profiles.find((p) => p.id === s.activeProfileId) || s.profiles[0];
 }
 
 function vaultStatus(): { hasVault: boolean; isUnlocked: boolean; needsSetup: boolean } {
   const s = loadAppSettings();
   const hasVault = !!s.vault;
-  const isUnlocked = unlockedSecrets != null;
-  const pendingSecrets = unlockedSecrets && Object.values(unlockedSecrets).some(hasAnySecret);
-  const needsSetup = !hasVault && !!pendingSecrets;
+  const isUnlocked = hasVault && !vaultLocked && unlockedSecrets != null;
+  const needsSetup = !hasVault && pendingPlaintext;
   return { hasVault, isUnlocked, needsSetup };
 }
 
 /** True if user must unlock before upload (vault exists and locked) */
 export function isVaultLockedBlocking(): boolean {
-  const s = loadAppSettings();
-  return !!s.vault && unlockedSecrets == null;
+  loadAppSettings();
+  return vaultLocked;
 }
 
-/** True if vault must be created before secrets can be persisted */
+/** True if vault must be created before settings can be stored on disk */
 export function needsVaultSetup(): boolean {
-  return !loadAppSettings().vault;
+  const s = loadAppSettings();
+  return !s.vault && pendingPlaintext;
 }
 
 export function isVaultUnlocked(): boolean {
-  return unlockedSecrets != null;
+  loadAppSettings();
+  return !!cached?.vault && !vaultLocked && unlockedSecrets != null;
 }
 
 export function hasVault(): boolean {
   return !!loadAppSettings().vault;
 }
 
-export function unlockVault(password: string): { ok: boolean; error?: string } {
+function buildConfigPayload(): VaultConfigPayload {
   const s = loadAppSettings();
-  if (!s.vault) return { ok: false, error: 'no_vault' };
-  try {
-    unlockedSecrets = decryptSecrets(password, s.vault);
-    masterPasswordSession = password;
-    return { ok: true };
-  } catch {
-    unlockedSecrets = null;
-    masterPasswordSession = null;
-    return { ok: false, error: 'bad_password' };
+  const secrets: SecretsPayload = unlockedSecrets ? { ...unlockedSecrets } : {};
+  for (const p of s.profiles) {
+    if (!secrets[p.id]) secrets[p.id] = {};
+  }
+  return {
+    version: CONFIG_VERSION,
+    language: s.language,
+    afterUploadFeedback: s.afterUploadFeedback,
+    watermark: s.watermark,
+    activeProfileId: s.activeProfileId,
+    profiles: s.profiles.map(stripAccidentalSecrets),
+    secrets
+  };
+}
+
+function applyConfigPayload(raw: VaultConfigPayload, vault: VaultBlob): void {
+  const profiles = raw.profiles.map((pr, i) => normalizeProfile(pr, i === 0 ? 'Default' : `Profile ${i + 1}`));
+  if (profiles.length === 0) profiles.push(createEmptyProfile('Default'));
+  let activeProfileId = raw.activeProfileId;
+  if (!profiles.some((p) => p.id === activeProfileId)) activeProfileId = profiles[0].id;
+  cached = {
+    language: raw.language ?? '',
+    afterUploadFeedback:
+      raw.afterUploadFeedback === 'notification' || raw.afterUploadFeedback === 'window'
+        ? raw.afterUploadFeedback
+        : 'overlay',
+    watermark: { ...defaultWatermark(), ...(raw.watermark || {}) },
+    activeProfileId,
+    profiles,
+    vault
+  };
+  unlockedSecrets = { ...(raw.secrets || {}) };
+  for (const p of profiles) {
+    if (!unlockedSecrets[p.id]) unlockedSecrets[p.id] = {};
   }
 }
 
+function persistEncrypted(): void {
+  const s = loadAppSettings();
+  if (!masterPasswordSession || unlockedSecrets == null) return;
+  const blob = encryptSecrets(masterPasswordSession, buildConfigPayload());
+  writeDisk(blob);
+  s.vault = blob;
+  cached = s;
+}
+
+export function unlockVault(password: string): { ok: boolean; error?: string } {
+  const s = loadAppSettings();
+  if (!s.vault) return { ok: false, error: 'no_vault' };
+  let raw: unknown;
+  try {
+    raw = decryptSecrets(password, s.vault);
+  } catch {
+    return { ok: false, error: 'bad_password' };
+  }
+  const vault = s.vault;
+  if (isConfigPayload(raw)) {
+    applyConfigPayload(raw, vault);
+  } else if (isLegacySecretsMap(raw)) {
+    const base = legacySettings ? { ...legacySettings, vault } : { ...defaultAppSettings(), vault };
+    cached = base;
+    unlockedSecrets = { ...raw };
+    for (const p of base.profiles) {
+      if (!unlockedSecrets[p.id]) unlockedSecrets[p.id] = {};
+    }
+  } else {
+    return { ok: false, error: 'bad_password' };
+  }
+  masterPasswordSession = password;
+  vaultLocked = false;
+  pendingPlaintext = false;
+  try {
+    persistEncrypted();
+  } catch (e) {
+    console.error(e);
+    masterPasswordSession = null;
+    vaultLocked = true;
+    unlockedSecrets = null;
+    cached = lockedShell(vault);
+    return { ok: false, error: 'encrypt_failed' };
+  }
+  legacySettings = null;
+  return { ok: true };
+}
+
 export function lockVault(): void {
+  const s = loadAppSettings();
+  if (!s.vault) return;
+  const vault = s.vault;
   unlockedSecrets = null;
   masterPasswordSession = null;
+  vaultLocked = true;
+  legacySettings = null;
+  cached = lockedShell(vault);
 }
 
 export function setupVault(password: string): { ok: boolean; error?: string } {
   if (!password || password.length < 4) return { ok: false, error: 'weak_password' };
   const s = loadAppSettings();
   if (s.vault) return { ok: false, error: 'already_exists' };
-  const payload: SecretsPayload = unlockedSecrets ? { ...unlockedSecrets } : {};
-  // ensure all profile ids exist as keys
+  if (unlockedSecrets == null) unlockedSecrets = {};
   for (const p of s.profiles) {
-    if (!payload[p.id]) payload[p.id] = {};
+    if (!unlockedSecrets[p.id]) unlockedSecrets[p.id] = {};
   }
+  masterPasswordSession = password;
+  pendingPlaintext = false;
+  legacySettings = null;
+  vaultLocked = false;
   try {
-    s.vault = encryptSecrets(password, payload);
-    unlockedSecrets = payload;
-    masterPasswordSession = password;
-    persist(s);
+    persistEncrypted();
     return { ok: true };
   } catch (e) {
     console.error(e);
+    masterPasswordSession = null;
+    pendingPlaintext = true;
     return { ok: false, error: 'encrypt_failed' };
   }
 }
@@ -445,36 +616,42 @@ export function changeVaultPassword(oldPassword: string, newPassword: string): {
   const s = loadAppSettings();
   if (!s.vault) return { ok: false, error: 'no_vault' };
   try {
-    const payload = decryptSecrets(oldPassword, s.vault);
-    s.vault = encryptSecrets(newPassword, payload);
-    unlockedSecrets = payload;
-    masterPasswordSession = newPassword;
-    persist(s);
-    return { ok: true };
+    decryptSecrets(oldPassword, s.vault);
   } catch {
     return { ok: false, error: 'bad_password' };
+  }
+  if (vaultLocked || unlockedSecrets == null) return { ok: false, error: 'locked' };
+  const previousPassword = masterPasswordSession;
+  masterPasswordSession = newPassword;
+  try {
+    persistEncrypted();
+    return { ok: true };
+  } catch (e) {
+    console.error(e);
+    masterPasswordSession = previousPassword;
+    return { ok: false, error: 'encrypt_failed' };
   }
 }
 
 export function resetVault(): void {
-  const s = loadAppSettings();
-  s.vault = null;
+  cached = defaultAppSettings();
   unlockedSecrets = {};
   masterPasswordSession = null;
-  persist(s);
+  vaultLocked = false;
+  pendingPlaintext = false;
+  legacySettings = null;
+  loadFailed = false;
+  try {
+    writeDisk(null);
+  } catch (e) {
+    console.error(e);
+  }
 }
 
 function ensureUnlockedForSecrets(): void {
   if (unlockedSecrets == null) {
     unlockedSecrets = {};
   }
-}
-
-function persistVaultIfPossible(): void {
-  const s = loadAppSettings();
-  if (!s.vault || !masterPasswordSession || unlockedSecrets == null) return;
-  s.vault = encryptSecrets(masterPasswordSession, unlockedSecrets);
-  persist(s);
 }
 
 export function getSecretsForProfile(profileId: string): ProfileSecrets {
@@ -514,19 +691,13 @@ export function updateProfileSecrets(
     cur.apiKey = incoming.apiKey;
   }
   unlockedSecrets![profileId] = cur;
-
-  if (s.vault) {
-    if (!masterPasswordSession) return { ok: false, error: 'locked' };
-    persistVaultIfPossible();
-  }
-  // If no vault yet and we have secrets — caller should prompt setup
   return { ok: true };
 }
 
 export function deleteProfileSecrets(profileId: string): void {
   if (!unlockedSecrets) return;
   delete unlockedSecrets[profileId];
-  persistVaultIfPossible();
+  if (masterPasswordSession && loadAppSettings().vault) persistEncrypted();
 }
 
 export function getSecretFlags(): Record<string, ProfileSecretFlags> {
@@ -553,8 +724,17 @@ export function getSecretFlags(): Record<string, ProfileSecretFlags> {
 export function getSettingsForUi(): SettingsForUi {
   const s = loadAppSettings();
   const status = vaultStatus();
-  // needsSetup also if no vault and user never set one — first-time with secrets pending
-  const pendingSecrets = unlockedSecrets && Object.values(unlockedSecrets).some(hasAnySecret);
+  if (vaultLocked) {
+    return {
+      language: '',
+      afterUploadFeedback: 'overlay',
+      watermark: defaultWatermark(),
+      activeProfileId: '',
+      profiles: [],
+      vault: { hasVault: true, isUnlocked: false, needsSetup: false },
+      secretFlags: {}
+    };
+  }
   return {
     language: s.language,
     afterUploadFeedback: s.afterUploadFeedback,
@@ -564,7 +744,7 @@ export function getSettingsForUi(): SettingsForUi {
     vault: {
       hasVault: status.hasVault,
       isUnlocked: status.isUnlocked,
-      needsSetup: !status.hasVault && !!pendingSecrets
+      needsSetup: status.needsSetup
     },
     secretFlags: getSecretFlags()
   };
@@ -572,7 +752,8 @@ export function getSettingsForUi(): SettingsForUi {
 
 /**
  * Save full UI payload: global settings + profiles list + optional secrets per profile.
- * secretsByProfile: { [id]: { sshPassword?, ... } } empty string = keep
+ * secretsByProfile: { [id]: { sshPassword?, ... } } empty string = keep.
+ * With a vault, the whole config is re-encrypted. Without one, nothing is written to disk.
  */
 export function saveFromUi(payload: {
   language?: string;
@@ -588,20 +769,14 @@ export function saveFromUi(payload: {
   }>;
 }): { ok: boolean; error?: string; needsVaultSetup?: boolean } {
   const prev = loadAppSettings();
+  if (vaultLocked || (prev.vault && unlockedSecrets == null)) {
+    return { ok: false, error: 'locked' };
+  }
+
   const oldIds = new Set(prev.profiles.map((p) => p.id));
   const newProfiles = payload.profiles.map((pr, i) => normalizeProfile(pr, pr.name || `Profile ${i + 1}`));
   if (newProfiles.length === 0) {
     return { ok: false, error: 'no_profiles' };
-  }
-
-  if (prev.vault && unlockedSecrets == null && payload.secretsByProfile &&
-      Object.values(payload.secretsByProfile).some((x) =>
-        (x.sshPassword && x.sshPassword.length > 0) ||
-        (x.ftpPassword && x.ftpPassword.length > 0) ||
-        (x.s3SecretAccessKey && x.s3SecretAccessKey.length > 0) ||
-        (x.apiKey && x.apiKey.length > 0)
-      )) {
-    return { ok: false, error: 'locked' };
   }
 
   let activeProfileId = payload.activeProfileId || prev.activeProfileId;
@@ -609,7 +784,7 @@ export function saveFromUi(payload: {
     activeProfileId = newProfiles[0].id;
   }
 
-  const next: AppSettings = {
+  cached = {
     language: payload.language !== undefined ? payload.language : prev.language,
     afterUploadFeedback:
       payload.afterUploadFeedback !== undefined ? payload.afterUploadFeedback : prev.afterUploadFeedback,
@@ -618,9 +793,7 @@ export function saveFromUi(payload: {
     profiles: newProfiles,
     vault: prev.vault
   };
-  persist(next);
 
-  // Drop secrets for deleted profiles
   if (unlockedSecrets) {
     const newIds = new Set(newProfiles.map((p) => p.id));
     for (const id of Object.keys(unlockedSecrets)) {
@@ -635,29 +808,36 @@ export function saveFromUi(payload: {
     }
   }
 
-  // New profiles: ensure secret keys exist
   ensureUnlockedForSecrets();
   for (const p of newProfiles) {
     if (!oldIds.has(p.id) && unlockedSecrets && !unlockedSecrets[p.id]) {
       unlockedSecrets[p.id] = {};
     }
   }
-  persistVaultIfPossible();
 
-  const pending = unlockedSecrets && Object.values(unlockedSecrets).some(hasAnySecret);
-  const needsVaultSetup = !loadAppSettings().vault && !!pending;
-  return { ok: true, needsVaultSetup };
+  if (cached.vault) {
+    if (!masterPasswordSession) return { ok: false, error: 'locked' };
+    try {
+      persistEncrypted();
+    } catch (e) {
+      console.error(e);
+      return { ok: false, error: 'encrypt_failed' };
+    }
+    return { ok: true };
+  }
+
+  pendingPlaintext = true;
+  return { ok: true, needsVaultSetup: true };
 }
 
 /** Runtime settings for uploaders based on active profile + unlocked secrets */
 export function getRuntimeUploadSettings(): RuntimeUploadSettings | { error: 'locked' | 'no_profile' } {
   const s = loadAppSettings();
-  const profile = s.profiles.find((p) => p.id === s.activeProfileId) || s.profiles[0];
-  if (!profile) return { error: 'no_profile' };
-
-  if (s.vault && unlockedSecrets == null) {
+  if (vaultLocked || (s.vault && unlockedSecrets == null)) {
     return { error: 'locked' };
   }
+  const profile = s.profiles.find((p) => p.id === s.activeProfileId) || s.profiles[0];
+  if (!profile) return { error: 'no_profile' };
 
   const sec = (unlockedSecrets && unlockedSecrets[profile.id]) || {};
   return {
@@ -680,8 +860,7 @@ export function loadSettingsCompat(): RuntimeUploadSettings & AppSettings {
   const appS = loadAppSettings();
   const runtime = getRuntimeUploadSettings();
   if ('error' in runtime) {
-    // locked: return structure without secrets
-    const profile = getActiveProfile();
+    const profile = getActiveProfile() || createEmptyProfile('Default');
     return {
       ...appS,
       saveMethod: profile.saveMethod,

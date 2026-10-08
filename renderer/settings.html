@@ -89,7 +89,11 @@
         .vault-box .status { margin-bottom: 8px; color: #2c3e50; }
         .vault-actions { display: flex; gap: 8px; flex-wrap: wrap; }
         .secret-hint { font-size: 11px; color: #7f8c8d; margin-top: 4px; }
-        .active-badge {
+        .settings-locked {
+            margin: 8px 0 4px;
+            color: #2c3e50;
+            line-height: 1.4;
+        }
             font-size: 11px;
             background: #27ae60;
             color: #fff;
@@ -114,6 +118,11 @@
             </div>
         </div>
 
+        <div id="settings-locked" class="settings-locked" style="display:none">
+            <p id="settings-locked-text" data-i18n="settings_lockedHint">Unlock the vault to view settings.</p>
+        </div>
+
+        <div id="settings-body">
         <div class="form-group">
             <label for="language" data-i18n="settings_language">Language</label>
             <select id="language">
@@ -329,6 +338,7 @@
             <button id="cancel-btn" class="btn-secondary" data-i18n="settings_cancel">Cancel</button>
             <button id="save-btn" class="btn-primary" data-i18n="settings_save">Save</button>
         </div>
+        </div>
     </div>
 
     <script>
@@ -514,6 +524,17 @@
             document.getElementById('watermark-opacity').value = w.opacity != null ? w.opacity : 0.5;
 
             updateVaultUi();
+            const locked = vault.hasVault && !vault.isUnlocked;
+            document.getElementById('settings-body').style.display = locked ? 'none' : '';
+            document.getElementById('settings-locked').style.display = locked ? '' : 'none';
+            if (locked) {
+                document.querySelectorAll('#settings-body input').forEach((el) => {
+                    if (el.type === 'checkbox') el.checked = false;
+                    else if (el.type !== 'color') el.value = '';
+                });
+                return;
+            }
+
             const first = profiles.find(p => p.id === activeProfileId) || profiles[0];
             if (first) fillFormFromProfile(first);
             else {

@@ -149,7 +149,7 @@ All settings: **Tray → Settings**. Stored in user data (e.g. `%APPDATA%\simple
 | Section | Description |
 |---------|-------------|
 | **Upload profiles** | Named configs (SSH/FTP/S3/API); optional “Show in tray”; one active profile |
-| **Master password vault** | Secrets encrypted with scrypt + AES-256-GCM (portable Win/macOS/Linux) |
+| **Master password vault** | Profiles and secrets encrypted with scrypt + AES-256-GCM. Hidden until unlock (Win/macOS/Linux) |
 | **Base URL** | Per-profile prefix for uploaded file links |
 | **Watermark** | Enable, text, position, font size, color, opacity (0–1) |
 | **Language** | Interface language or *System default* |
@@ -253,4 +253,4 @@ npm run build && npm start
 
 This project is licensed under the **MIT License** — see [LICENSE](LICENSE) for the full text.
 
-**Copyright © 2025 Aliaksei Prybytkou**
+**Copyright © 2026 Aliaksei Prybytkou**

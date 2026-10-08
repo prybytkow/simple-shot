@@ -41,7 +41,7 @@ function deriveKey(password: string, salt: Buffer, N: number, r: number, p: numb
   return scryptSync(password, salt, KEY_LEN, { N, r, p, maxmem: 256 * 1024 * 1024 });
 }
 
-export function encryptSecrets(password: string, payload: SecretsPayload): VaultBlob {
+export function encryptSecrets(password: string, payload: unknown): VaultBlob {
   const salt = randomBytes(SALT_LEN);
   const iv = randomBytes(IV_LEN);
   const key = deriveKey(password, salt, SCRYPT_N, SCRYPT_R, SCRYPT_P);
@@ -62,7 +62,7 @@ export function encryptSecrets(password: string, payload: SecretsPayload): Vault
   };
 }
 
-export function decryptSecrets(password: string, blob: VaultBlob): SecretsPayload {
+export function decryptSecrets(password: string, blob: VaultBlob): unknown {
   if (!blob || blob.kdf !== KDF_NAME) {
     throw new Error('Unsupported vault format');
   }
@@ -77,7 +77,7 @@ export function decryptSecrets(password: string, blob: VaultBlob): SecretsPayloa
   const decipher = createDecipheriv('aes-256-gcm', key, iv);
   decipher.setAuthTag(tag);
   const dec = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-  const parsed = JSON.parse(dec.toString('utf8')) as SecretsPayload;
+  const parsed: unknown = JSON.parse(dec.toString('utf8'));
   if (!parsed || typeof parsed !== 'object') {
     throw new Error('Invalid vault payload');
   }

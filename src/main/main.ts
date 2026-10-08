@@ -252,6 +252,8 @@ app.whenReady().then(() => {
   const ui = getSettingsForUi();
   if (ui.vault.needsSetup) {
     showUnlockWindow('setup');
+  } else if (ui.vault.hasVault && !ui.vault.isUnlocked) {
+    showUnlockWindow('unlock');
   }
 });
 
