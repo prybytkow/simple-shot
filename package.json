@@ -40,19 +40,19 @@
     }
   },
   "devDependencies": {
-    "@types/ssh2-sftp-client": "^9.0.5",
-    "electron": "^39.2.3",
-    "electron-builder": "^26.8.1",
-    "tsc-watch": "^6.0.0",
-    "typescript": "^5.9.3"
+    "@types/node": "^26.6.3",
+    "@types/ssh2-sftp-client": "^9.0.6",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "tsc-watch": "^7.2.1",
+    "typescript": "^7.0.2"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.893.0",
-    "@aws-sdk/s3-request-presigner": "^3.893.0",
-    "@types/node": "^20.0.0",
-    "basic-ftp": "^5.0.5",
-    "koffi": "^3.1.4",
-    "ssh2-sftp-client": "^12.0.1"
+    "@aws-sdk/client-s3": "^3.1143.0",
+    "@aws-sdk/s3-request-presigner": "^3.1143.0",
+    "basic-ftp": "^6.2.1",
+    "koffi": "^3.3.2",
+    "ssh2-sftp-client": "^12.1.1"
   },
   "author": "Aliaksei Prybytkou",
   "license": "MIT",

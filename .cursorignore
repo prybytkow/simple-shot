@@ -1,0 +1,13 @@
+﻿# Dependencies
+node_modules/
+
+# Build output
+dist/
+release/
+
+# Git
+.git/
+
+# Test coverage (if present)
+coverage/
+.nyc_output/
