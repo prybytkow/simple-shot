@@ -10,7 +10,6 @@ import { ApiUploader } from './uploaders/api-uploader';
 import { loadSettings, getMainWindow, ensureVaultUnlockedForUpload } from './main';
 import { getRuntimeUploadSettings, loadAppSettings } from './settings-store';
 import { resolveLanguage, getTranslations } from './i18n';
-import { captureRegionGdi } from './gdi-capture';
 
 type AfterUploadFeedback = 'overlay' | 'notification' | 'window';
 
@@ -81,6 +80,30 @@ async function hideOverlaysForCapture(): Promise<void> {
   await sleep(80);
 }
 
+/** Show overlays again after a Linux capture so upload feedback still has a window. */
+async function restoreOverlaysAfterCapture(): Promise<void> {
+  for (const win of overlayWindows) {
+    if (!win.isDestroyed()) {
+      win.setOpacity(1);
+      win.show();
+      win.setAlwaysOnTop(true);
+    }
+  }
+}
+
+/** Wayland close() of a transparent overlay can SIGTRAP. Hide, then destroy on the next turn. */
+function closeCaptureWindow(win: BrowserWindow): void {
+  if (win.isDestroyed()) return;
+  if (process.platform === 'linux') {
+    win.hide();
+    setTimeout(() => {
+      if (!win.isDestroyed()) win.destroy();
+    }, 0);
+    return;
+  }
+  win.close();
+}
+
 async function captureScreenshot(areaData: any, sourceDisplayId?: number): Promise<Buffer> {
   const { x, y, width, height } = areaData;
 
@@ -118,11 +141,37 @@ async function captureScreenshot(areaData: any, sourceDisplayId?: number): Promi
   if (process.platform === 'win32') {
     try {
       await hideOverlaysForCapture();
+      const { captureRegionGdi } = require('./gdi-capture') as typeof import('./gdi-capture');
       const png = captureRegionGdi(physRect.x, physRect.y, physRect.width, physRect.height);
       console.log(`✅ GDI capture ${physRect.width}x${physRect.height}`);
       return png;
     } catch (err) {
       console.warn('GDI capture failed, falling back to desktopCapturer:', err);
+    }
+  }
+
+  if (process.platform === 'linux') {
+    const linux = require('./linux-screen-capture') as typeof import('./linux-screen-capture');
+    await hideOverlaysForCapture();
+    try {
+      if (linux.isWaylandSession()) {
+        try {
+          // hideOverlays already waited 80ms; Wayland compositors need a little longer
+          await sleep(170);
+          const png = await linux.captureRegionLinux(
+            { x, y, width, height },
+            targetDisplay,
+            displays
+          );
+          console.log(`✅ Portal capture ${width}x${height}`);
+          return png;
+        } catch (err) {
+          console.warn('Portal capture failed, falling back to desktopCapturer:', err);
+        }
+      }
+      return await captureScreenshotDesktopCapturer(areaData, targetDisplay);
+    } finally {
+      await restoreOverlaysAfterCapture();
     }
   }
 
@@ -312,13 +361,9 @@ function hideAllCaptureWindows(): void {
 
 // Функция для закрытия всех окон захвата (уничтожить — вызывается при новом захвате или ESC)
 export function closeAllCaptureWindows(): void {
-  overlayWindows.forEach(win => {
-    if (!win.isDestroyed()) {
-      win.close();
-    }
-  });
+  overlayWindows.forEach(win => closeCaptureWindow(win));
   overlayWindows = [];
-   activeWindow = null;
+  activeWindow = null;
 }
 
 // Обработчик для активации одного окна и закрытия остальных
@@ -341,7 +386,7 @@ ipcMain.on('activate-single-window', (event, screenId) => {
       const winScreenId = win.webContents.getURL().includes(`screenId=${screenId}`);
     //  win.webContents.openDevTools();
       if (!winScreenId) {
-        win.close();
+        closeCaptureWindow(win);
       }
     }
   });
@@ -364,9 +409,16 @@ async function saveOrUploadScreenshot(
   settings: any
 ): Promise<void> {
   if (saveLocally) {
-    // Родитель диалога — скрытое окно, не окно захвата (иначе при закрытии окна захвата приложение может завершиться)
-    const parentWin = getMainWindow() ?? BrowserWindow.fromWebContents(event.sender);
-    if (!parentWin || parentWin.isDestroyed()) {
+    const saveOptions: Electron.SaveDialogOptions = {
+      defaultPath: fileName,
+      filters: [{ name: 'PNG', extensions: ['png'] }]
+    };
+    // На Linux диалог без родителя: скрытое окно 100×100 на Wayland часто его не показывает.
+    // На Windows родитель — скрытое окно, не окно захвата (иначе при закрытии окна захвата приложение может завершиться).
+    const parentWin = process.platform === 'linux'
+      ? null
+      : (getMainWindow() ?? BrowserWindow.fromWebContents(event.sender));
+    if (process.platform !== 'linux' && (!parentWin || parentWin.isDestroyed())) {
       replyUploadComplete(event, { success: false, error: 'Окно недоступно', saveLocally: true }, settings);
       return;
     }
@@ -377,17 +429,22 @@ async function saveOrUploadScreenshot(
         win.setIgnoreMouseEvents(true, { forward: false });
       }
     });
-    const { canceled, filePath: savePath } = await dialog.showSaveDialog(parentWin, {
-      defaultPath: fileName,
-      filters: [{ name: 'PNG', extensions: ['png'] }]
-    });
-    // Вернуть окнам захвата поверх всех и приём мыши
-    overlayWindows.forEach(win => {
-      if (!win.isDestroyed()) {
-        win.setAlwaysOnTop(true);
-        win.setIgnoreMouseEvents(false);
-      }
-    });
+    let canceled = true;
+    let savePath: string | undefined;
+    try {
+      const result = process.platform === 'linux'
+        ? await dialog.showSaveDialog(saveOptions)
+        : await dialog.showSaveDialog(parentWin!, saveOptions);
+      canceled = result.canceled;
+      savePath = result.filePath;
+    } finally {
+      overlayWindows.forEach(win => {
+        if (!win.isDestroyed()) {
+          win.setAlwaysOnTop(true);
+          win.setIgnoreMouseEvents(false);
+        }
+      });
+    }
     if (canceled || !savePath) {
       replyUploadComplete(event, { success: false, error: 'Отменено', saveLocally: true }, settings);
       return;
