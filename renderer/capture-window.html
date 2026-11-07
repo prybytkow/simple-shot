@@ -466,12 +466,67 @@
             font-size: 14px;
             pointer-events: none;
         }
+
+        body.mode-display-picker {
+            cursor: pointer;
+            background: rgba(0, 0, 0, 0.4);
+        }
+        body.mode-display-picker #selection-area,
+        body.mode-display-picker #toolbar,
+        body.mode-display-picker #info {
+            display: none !important;
+        }
+        #display-picker-badge {
+            display: none;
+            position: absolute;
+            inset: 0;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            pointer-events: none;
+            z-index: 50;
+            color: #fff;
+            text-shadow: 0 2px 12px rgba(0,0,0,0.6);
+        }
+        body.mode-display-picker #display-picker-badge {
+            display: flex;
+        }
+        #display-picker-badge .num {
+            font-size: min(28vw, 180px);
+            font-weight: 700;
+            line-height: 1;
+        }
+        #display-picker-badge .label {
+            margin-top: 12px;
+            font-size: 18px;
+            opacity: 0.9;
+            background: rgba(0,0,0,0.55);
+            padding: 8px 16px;
+            border-radius: 8px;
+        }
+        body.mode-fixed {
+            cursor: default;
+            background: #1a1b1f;
+        }
+        body.mode-fixed #info,
+        body.mode-fixed #screen-info {
+            display: none !important;
+        }
+        body.mode-fixed #selection-area {
+            background-size: 100% 100%;
+            background-repeat: no-repeat;
+            background-position: 0 0;
+        }
     </style>
 </head>
 <body>
     <div id="screen-info"><span data-i18n="capture_screenInfo">Screen</span> <span id="screen-number">1</span> <span data-i18n="capture_screenOf">of</span> <span id="total-screens">1</span></div>
     <div id="info" data-i18n="capture_info">Select screen: click and drag to define capture area</div>
     <div id="esc-hint" data-i18n="capture_escHint">Press ESC to cancel</div>
+    <div id="display-picker-badge">
+        <div class="num" id="display-picker-num">1</div>
+        <div class="label" data-i18n="capture_pickDisplay">Click to capture this display</div>
+    </div>
     <div id="overlay">
         <div id="selection-area">
             <canvas id="annotation-canvas"></canvas>
@@ -560,10 +615,18 @@
         const screenId = urlParams.get('screenId');
         const totalScreens = urlParams.get('totalScreens');
         const lang = urlParams.get('lang') || 'en';
+        const captureMode = urlParams.get('mode') || 'region';
+        const displayIdParam = urlParams.get('displayId');
         // Размер области захвата: берём максимум из main process (actualWidth/Height) и текущего окна (innerWidth/Height),
         // чтобы на любых мониторах можно было выделить весь видимый экран
-        const screenWidth = Math.max(1, Math.max(parseInt(urlParams.get('actualWidth'), 10) || 0, window.innerWidth || 0) || 1920);
-        const screenHeight = Math.max(1, Math.max(parseInt(urlParams.get('actualHeight'), 10) || 0, window.innerHeight || 0) || 1080);
+        let screenWidth = Math.max(1, Math.max(parseInt(urlParams.get('actualWidth'), 10) || 0, window.innerWidth || 0) || 1920);
+        let screenHeight = Math.max(1, Math.max(parseInt(urlParams.get('actualHeight'), 10) || 0, window.innerHeight || 0) || 1080);
+        if (captureMode === 'fixed') {
+            const iw = parseInt(urlParams.get('imageWidth'), 10);
+            const ih = parseInt(urlParams.get('imageHeight'), 10);
+            if (iw > 0) screenWidth = iw;
+            if (ih > 0) screenHeight = ih;
+        }
         
         const { ipcRenderer } = require('electron');
         window.__t = {};
@@ -829,9 +892,11 @@
         });
         
         // Показываем информацию об экране
-        document.getElementById('screen-number').textContent = parseInt(screenId) + 1;
-        document.getElementById('total-screens').textContent = totalScreens;
-        
+        document.getElementById('screen-number').textContent = (parseInt(screenId, 10) || 0) + 1;
+        document.getElementById('total-screens').textContent = totalScreens || '1';
+        const pickerNum = document.getElementById('display-picker-num');
+        if (pickerNum) pickerNum.textContent = String((parseInt(screenId, 10) || 0) + 1);
+
         const overlay = document.getElementById('overlay');
         const selectionArea = document.getElementById('selection-area');
         const toolbar = document.getElementById('toolbar');
@@ -839,6 +904,8 @@
         const escHint = document.getElementById('esc-hint');
         const screenInfo = document.getElementById('screen-info');
         const body = document.body;
+        if (captureMode === 'display-picker') body.classList.add('mode-display-picker');
+        if (captureMode === 'fixed') body.classList.add('mode-fixed');
         const resizeHandles = document.querySelectorAll('.resize-handle');
         
         let startX, startY, currentX, currentY;
@@ -1297,6 +1364,7 @@
         // Клик по экрану: выбор экрана + начало выделения (или новое выделение по тёмной области)
         body.addEventListener('mousedown', (e) => {
             if (e.button !== 0) return;
+            if (captureMode === 'display-picker' || captureMode === 'fixed') return;
             if (!screenActive) {
                 activateScreen();
                 startSelectionAt(e.clientX, e.clientY);
@@ -2049,8 +2117,10 @@
         document.getElementById('undo-btn').onclick = () => restoreState();
         
         // Добавляем обработчики для кнопок
-        document.getElementById('save-btn').onclick = () => sendCaptureArea(true);
-        document.getElementById('save-to-server-btn').onclick = () => sendCaptureArea(false);
+        document.getElementById('save-btn').onclick = () => sendCaptureArea('file');
+        document.getElementById('save-to-server-btn').onclick = () => sendCaptureArea('upload');
+        const copyToolBtn = document.getElementById('copy-btn');
+        if (copyToolBtn) copyToolBtn.onclick = () => sendCaptureArea('clipboard');
         
         document.getElementById('close-btn').onclick = () => {
             closeAllWindows();
@@ -2354,8 +2424,11 @@
             }
         }
 
-        function sendCaptureArea(saveLocally) {
+        function sendCaptureArea(destination) {
             const { ipcRenderer } = require('electron');
+            const dest = destination === 'file' || destination === 'clipboard' || destination === 'upload'
+                ? destination
+                : (destination ? 'file' : 'upload');
             const x = parseInt(selectionArea.style.left, 10) || 0;
             const y = parseInt(selectionArea.style.top, 10) || 0;
             const width = parseInt(selectionArea.style.width, 10) || 0;
@@ -2364,15 +2437,83 @@
             document.body.classList.add('capture-hide-ui');
             const tb = document.getElementById('toolbar');
             if (tb) tb.style.visibility = 'hidden';
-            if (!saveLocally) showUploadStatus('uploading');
+            if (dest === 'upload') showUploadStatus('uploading');
             else hideUploadStatus();
-            ipcRenderer.send('capture-area', {
+            const payload = {
                 x: x, y: y, width: width, height: height,
                 screenId: screenId,
-                saveLocally: !!saveLocally,
+                destination: dest,
+                saveLocally: dest === 'file',
                 annotations: JSON.parse(JSON.stringify(annotationList || []))
+            };
+            if (captureMode === 'fixed') {
+                ipcRenderer.send('fixed-capture-area', payload);
+            } else {
+                ipcRenderer.send('capture-area', payload);
+            }
+        }
+
+        function initDisplayPickerMode() {
+            if (captureMode !== 'display-picker') return;
+            const pick = () => {
+                const id = displayIdParam != null ? Number(displayIdParam) : NaN;
+                if (!Number.isFinite(id)) return;
+                ipcRenderer.send('pick-display', id);
+            };
+            body.addEventListener('click', pick);
+            body.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    pick();
+                }
             });
         }
+
+        function enterFixedAnnotation(pngBuffer) {
+            const bytes = toUint8Array(pngBuffer);
+            const blob = new Blob([bytes], { type: 'image/png' });
+            const url = URL.createObjectURL(blob);
+            const img = new Image();
+            img.onload = () => {
+                // Fit display size to window; annotations stay 0–1 relative to selection,
+                // compose maps them onto the full-resolution PNG buffer.
+                const natW = Math.max(1, img.naturalWidth || img.width);
+                const natH = Math.max(1, img.naturalHeight || img.height);
+                const maxW = Math.max(200, window.innerWidth || natW);
+                const maxH = Math.max(200, (window.innerHeight || natH) - 8);
+                const scale = Math.min(1, maxW / natW, maxH / natH);
+                screenWidth = Math.max(1, Math.round(natW * scale));
+                screenHeight = Math.max(1, Math.round(natH * scale));
+                document.body.style.width = screenWidth + 'px';
+                document.body.style.height = screenHeight + 'px';
+                if (overlay) {
+                    overlay.style.width = screenWidth + 'px';
+                    overlay.style.height = screenHeight + 'px';
+                }
+                selectionArea.style.display = 'block';
+                selectionArea.style.left = '0px';
+                selectionArea.style.top = '0px';
+                selectionArea.style.width = screenWidth + 'px';
+                selectionArea.style.height = screenHeight + 'px';
+                selectionArea.style.backgroundImage = 'url(' + url + ')';
+                selectionArea.style.backgroundSize = '100% 100%';
+                screenActive = true;
+                if (info) info.style.display = 'none';
+                if (screenInfo) screenInfo.style.display = 'none';
+                showToolbar();
+            };
+            img.src = url;
+        }
+
+        function initFixedMode() {
+            if (captureMode !== 'fixed') return;
+            ipcRenderer.on('load-fixed-image', (_e, pngBuffer) => {
+                enterFixedAnnotation(pngBuffer);
+            });
+        }
+
+        initDisplayPickerMode();
+        initFixedMode();
 
         function setupUploadStatusHandlers() {
             if (uploadHandlersReady) return;
@@ -2402,12 +2543,40 @@
             ipcRenderer.on('upload-complete', (event, payload) => {
                 const success = !!(payload && payload.success);
                 const saveLocally = !!(payload && payload.saveLocally);
+                const copiedImage = !!(payload && payload.copiedImage);
                 const feedback = (payload && payload.feedback) || 'overlay';
                 const url = (payload && payload.url) || '';
                 const error = (payload && payload.error) || '';
 
                 document.body.classList.remove('capture-hide-ui');
                 const tb = document.getElementById('toolbar');
+
+                if (copiedImage) {
+                    hideUploadStatus();
+                    if (!success) {
+                        if (tb) {
+                            tb.style.visibility = '';
+                            tb.style.display = 'block';
+                        }
+                        return;
+                    }
+                    if (feedback === 'notification') {
+                        closeAllWindows();
+                        return;
+                    }
+                    if (feedback === 'overlay' || feedback === 'window') {
+                        showUploadStatus('success', {
+                            url: t.notify_copiedBody || 'Screenshot copied to clipboard',
+                            keepOpen: feedback === 'window'
+                        });
+                        if (feedback !== 'window') {
+                            setTimeout(() => closeAllWindows(), 1200);
+                        }
+                        return;
+                    }
+                    closeAllWindows();
+                    return;
+                }
 
                 if (saveLocally) {
                     hideUploadStatus();

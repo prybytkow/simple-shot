@@ -1,13 +1,20 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, Tray, Menu, ipcMain, MenuItemConstructorOptions, shell } from 'electron';
 import * as path from 'path';
-import { setupScreenCapture } from './screen-capture';
+import { setupScreenCapture, isCaptureSessionOpen, openHistoryReedit } from './screen-capture';
 import { setupSSHHandler } from './ssh-handler';
-import { getHistory } from './history';
+import {
+  getHistoryForUi,
+  deleteHistoryEntry,
+  resolveReeditPath,
+  resolveRevealPath,
+  getHistoryEntry
+} from './history';
 import { resolveLanguage, getTranslations } from './i18n';
 import {
   loadAppSettings,
   loadSettingsCompat,
   getSettingsForUi,
+  getCaptureSettings,
   saveFromUi,
   setActiveProfile,
   getActiveProfile,
@@ -22,6 +29,26 @@ import {
   createEmptyProfile,
   UploadProfile
 } from './settings-store';
+import {
+  setHotkeyHandlers,
+  setHotkeySettingsWindowGetter,
+  registerAllHotkeys,
+  unregisterAll,
+  getHotkeysPayload,
+  setHotkey,
+  resetHotkeysToDefaults
+} from './hotkeys';
+import {
+  setupUpdater,
+  checkForUpdates,
+  downloadUpdate,
+  installUpdate,
+  getUpdaterState,
+  refreshUpdaterSettings
+} from './updater';
+import { appIconPath, createTrayIcon } from './app-icon';
+import { previewFileName } from './export-encode';
+import { registerFileUploadIpc } from './file-upload';
 
 process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true';
 
@@ -38,6 +65,7 @@ let tray: Tray;
 let mainWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
 let historyWindow: BrowserWindow | null = null;
+let uploadWindow: BrowserWindow | null = null;
 let unlockWindow: BrowserWindow | null = null;
 let isQuitting = false;
 
@@ -56,7 +84,7 @@ function getResolvedLang(): string {
 }
 
 function iconFile(): string {
-  return path.join(__dirname, 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png');
+  return appIconPath();
 }
 
 export function buildTrayMenu(): void {
@@ -74,8 +102,55 @@ export function buildTrayMenu(): void {
       }
     }));
 
+  const trayCapture = (fn: () => void) => () => {
+    if (isCaptureSessionOpen()) return;
+    fn();
+  };
+
   const template: MenuItemConstructorOptions[] = [
-    { label: t.tray_capture, click: () => setupScreenCapture() },
+    {
+      label: t.tray_capture,
+      submenu: [
+        {
+          label: t.tray_captureRegion || 'Region',
+          click: trayCapture(() => setupScreenCapture({ mode: 'region' }))
+        },
+        {
+          label: t.tray_captureFullscreen || 'Full screen',
+          click: trayCapture(() => setupScreenCapture({ mode: 'fullscreen' }))
+        },
+        {
+          label: t.tray_captureWindow || 'Window',
+          click: trayCapture(() => setupScreenCapture({ mode: 'window' }))
+        },
+        {
+          label: t.tray_captureDelayed || 'Delayed…',
+          submenu: [
+            {
+              label: t.tray_delay3 || '3 seconds',
+              click: trayCapture(() => {
+                const mode = getCaptureSettings().defaultMode;
+                setupScreenCapture({ mode, delaySeconds: 3 });
+              })
+            },
+            {
+              label: t.tray_delay5 || '5 seconds',
+              click: trayCapture(() => {
+                const mode = getCaptureSettings().defaultMode;
+                setupScreenCapture({ mode, delaySeconds: 5 });
+              })
+            },
+            {
+              label: t.tray_delay10 || '10 seconds',
+              click: trayCapture(() => {
+                const mode = getCaptureSettings().defaultMode;
+                setupScreenCapture({ mode, delaySeconds: 10 });
+              })
+            }
+          ]
+        }
+      ]
+    },
     { type: 'separator' }
   ];
 
@@ -87,8 +162,45 @@ export function buildTrayMenu(): void {
 
   template.push(
     { label: t.tray_settings, click: () => createSettingsWindow() },
-    { label: t.tray_history, click: () => createHistoryWindow() }
+    { label: t.tray_history, click: () => createHistoryWindow() },
+    { label: t.tray_uploadFiles || 'Upload files…', click: () => createUploadWindow() }
   );
+
+  const updaterState = getUpdaterState();
+  if (updaterState.status === 'ready') {
+    template.push({
+      label: t.tray_restartToUpdate || 'Restart to update',
+      click: () => installUpdate()
+    });
+  } else if (updaterState.status === 'available') {
+    template.push({
+      label: (t.tray_updateAvailable || 'Update available…').replace(
+        '{version}',
+        updaterState.version || ''
+      ),
+      click: () => downloadUpdate()
+    });
+  } else if (updaterState.status === 'downloading') {
+    template.push({
+      label: (t.tray_updaterDownloading || 'Downloading update… {percent}%').replace(
+        '{percent}',
+        String(updaterState.downloadPercent)
+      ),
+      enabled: false
+    });
+  } else if (updaterState.status === 'checking') {
+    template.push({
+      label: t.tray_updaterChecking || 'Checking for updates…',
+      enabled: false
+    });
+  } else {
+    template.push({
+      label: t.tray_checkUpdates || 'Check for updates',
+      click: () => {
+        void checkForUpdates(true);
+      }
+    });
+  }
 
   if (hasVault()) {
     template.push({ type: 'separator' });
@@ -114,6 +226,7 @@ export function buildTrayMenu(): void {
       label: t.tray_exit,
       click: () => {
         isQuitting = true;
+        unregisterAll();
         app.quit();
       }
     }
@@ -162,8 +275,8 @@ function createHistoryWindow(): void {
   const lang = getResolvedLang();
   const t = getTranslations(lang as any);
   historyWindow = new BrowserWindow({
-    width: 560,
-    height: 420,
+    width: 720,
+    height: 520,
     title: t.history_title,
     icon: iconFile(),
     webPreferences: {
@@ -174,6 +287,32 @@ function createHistoryWindow(): void {
   historyWindow.loadFile(path.join(__dirname, '../renderer/history.html'), { query: { lang } });
   historyWindow.on('closed', () => {
     historyWindow = null;
+  });
+}
+
+function createUploadWindow(): void {
+  if (uploadWindow && !uploadWindow.isDestroyed()) {
+    uploadWindow.focus();
+    return;
+  }
+  const lang = getResolvedLang();
+  const t = getTranslations(lang as any);
+  uploadWindow = new BrowserWindow({
+    width: 520,
+    height: 480,
+    title: t.upload_title || 'Upload files',
+    icon: iconFile(),
+    resizable: true,
+    minimizable: true,
+    maximizable: false,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    }
+  });
+  uploadWindow.loadFile(path.join(__dirname, '../renderer/upload.html'), { query: { lang } });
+  uploadWindow.on('closed', () => {
+    uploadWindow = null;
   });
 }
 
@@ -238,15 +377,56 @@ app.whenReady().then(() => {
     mainWindow = null;
   });
 
-  const icon = nativeImage.createFromPath(iconFile());
-  tray = new Tray(icon);
+  tray = new Tray(createTrayIcon());
   buildTrayMenu();
 
   tray.on('click', () => {
-    setupScreenCapture();
+    if (isCaptureSessionOpen()) return;
+    const cap = getCaptureSettings();
+    setupScreenCapture({
+      mode: cap.defaultMode,
+      delaySeconds: cap.delaySeconds
+    });
   });
 
   setupSSHHandler();
+  registerFileUploadIpc({
+    ensureVaultUnlockedForUpload: () => ensureVaultUnlockedForUpload(),
+    getUploadWindowParent: () =>
+      uploadWindow && !uploadWindow.isDestroyed()
+        ? uploadWindow
+        : getMainWindow(),
+    getUploadWindow: () => uploadWindow
+  });
+
+  const guardCapture = (fn: () => void) => () => {
+    if (isCaptureSessionOpen()) return;
+    fn();
+  };
+
+  setHotkeySettingsWindowGetter(() => settingsWindow);
+  setHotkeyHandlers({
+    'capture.region': guardCapture(() => setupScreenCapture({ mode: 'region' })),
+    'capture.fullscreen': guardCapture(() => setupScreenCapture({ mode: 'fullscreen' })),
+    'capture.window': guardCapture(() => setupScreenCapture({ mode: 'window' })),
+    'capture.delayed': guardCapture(() => {
+      const cap = getCaptureSettings();
+      const delay = cap.delaySeconds > 0 ? cap.delaySeconds : 3;
+      setupScreenCapture({ mode: cap.defaultMode, delaySeconds: delay });
+    }),
+    'history.open': () => createHistoryWindow(),
+    'settings.open': () => createSettingsWindow()
+  });
+  registerAllHotkeys();
+
+  setupUpdater({
+    prepareQuit: () => {
+      isQuitting = true;
+      unregisterAll();
+    },
+    onStatusChange: () => buildTrayMenu(),
+    getLang: () => getResolvedLang()
+  });
 
   // Migrated plaintext secrets in memory — force vault setup so they are not lost on quit
   const ui = getSettingsForUi();
@@ -267,16 +447,75 @@ ipcMain.handle('save-settings', (_event, payload: {
   language?: string;
   afterUploadFeedback?: 'overlay' | 'notification' | 'window';
   watermark?: any;
+  capture?: { defaultMode?: 'region' | 'fullscreen' | 'window'; delaySeconds?: number };
+  updates?: { autoCheck?: boolean; autoDownload?: boolean };
+  export?: {
+    fileNameTemplate?: string;
+    format?: 'png' | 'jpg' | 'webp';
+    jpegQuality?: number;
+    webpQuality?: number;
+    defaultDestination?: 'upload' | 'file' | 'clipboard';
+  };
   activeProfileId?: string;
   profiles: UploadProfile[];
   secretsByProfile?: Record<string, any>;
 }) => {
-  const result = saveFromUi(payload);
+  const result = saveFromUi({
+    ...payload,
+    capture: payload.capture
+      ? {
+          defaultMode:
+            payload.capture.defaultMode === 'fullscreen' || payload.capture.defaultMode === 'window'
+              ? payload.capture.defaultMode
+              : 'region',
+          delaySeconds:
+            typeof payload.capture.delaySeconds === 'number' ? payload.capture.delaySeconds : 3
+        }
+      : undefined,
+    updates: payload.updates
+      ? {
+          autoCheck: payload.updates.autoCheck !== false,
+          autoDownload: payload.updates.autoDownload !== false
+        }
+      : undefined,
+    export: payload.export
+      ? {
+          fileNameTemplate:
+            typeof payload.export.fileNameTemplate === 'string' && payload.export.fileNameTemplate.trim()
+              ? payload.export.fileNameTemplate.trim()
+              : 'screenshot-{yyyy}-{MM}-{dd}_{HH}-{mm}-{ss}',
+          format:
+            payload.export.format === 'jpg' || payload.export.format === 'webp'
+              ? payload.export.format
+              : 'png',
+          jpegQuality:
+            typeof payload.export.jpegQuality === 'number' ? payload.export.jpegQuality : 92,
+          webpQuality:
+            typeof payload.export.webpQuality === 'number' ? payload.export.webpQuality : 90,
+          defaultDestination:
+            payload.export.defaultDestination === 'file' ||
+            payload.export.defaultDestination === 'clipboard'
+              ? payload.export.defaultDestination
+              : 'upload'
+        }
+      : undefined
+  });
+  refreshUpdaterSettings();
   buildTrayMenu();
   if (result.needsVaultSetup) {
     showUnlockWindow('setup');
   }
   return result;
+});
+
+ipcMain.handle('export-preview-filename', (_e, payload: { template?: string; format?: string }) => {
+  const format =
+    payload?.format === 'jpg' || payload?.format === 'webp' ? payload.format : 'png';
+  const template =
+    typeof payload?.template === 'string' && payload.template.trim()
+      ? payload.template.trim()
+      : 'screenshot-{yyyy}-{MM}-{dd}_{HH}-{mm}-{ss}';
+  return previewFileName(template, format);
 });
 
 ipcMain.handle('create-empty-profile', (_e, name?: string) => {
@@ -297,6 +536,9 @@ ipcMain.handle('vault-status', () => {
 ipcMain.handle('vault-unlock', (_e, password: string) => {
   const result = unlockVault(password || '');
   buildTrayMenu();
+  if (result.ok) {
+    registerAllHotkeys();
+  }
   if (result.ok && settingsWindow && !settingsWindow.isDestroyed()) {
     settingsWindow.webContents.send('vault-updated');
   }
@@ -330,6 +572,7 @@ ipcMain.handle('vault-lock', () => {
 ipcMain.handle('vault-reset', () => {
   resetVault();
   buildTrayMenu();
+  registerAllHotkeys();
   if (settingsWindow && !settingsWindow.isDestroyed()) {
     settingsWindow.webContents.send('vault-updated');
   }
@@ -346,7 +589,56 @@ ipcMain.handle('close-unlock-window', () => {
   return { ok: true };
 });
 
-ipcMain.handle('get-history', () => getHistory());
+ipcMain.handle('get-history', () => getHistoryForUi());
+
+ipcMain.handle('history-delete', (_e, id: string) => {
+  if (!id || typeof id !== 'string') return { ok: false };
+  return deleteHistoryEntry(id);
+});
+
+ipcMain.handle('history-reedit', (_e, id: string) => {
+  if (!id || typeof id !== 'string') return { ok: false, error: 'unavailable' };
+  const filePath = resolveReeditPath(id);
+  if (!filePath) return { ok: false, error: 'unavailable' };
+  return openHistoryReedit(filePath);
+});
+
+ipcMain.handle('history-reveal', (_e, id: string) => {
+  if (!id || typeof id !== 'string') return { ok: false };
+  const filePath = resolveRevealPath(id);
+  if (!filePath) return { ok: false };
+  shell.showItemInFolder(filePath);
+  return { ok: true };
+});
+
+ipcMain.handle('history-open', async (_e, id: string) => {
+  if (!id || typeof id !== 'string') return { ok: false };
+  const entry = getHistoryEntry(id);
+  if (!entry) return { ok: false };
+  const target = entry.urlOrPath || resolveRevealPath(id);
+  if (!target) return { ok: false };
+  try {
+    if (/^https?:\/\//i.test(target)) {
+      await shell.openExternal(target);
+    } else {
+      await shell.openPath(target);
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
+});
+
+ipcMain.handle('hotkeys-get', () => getHotkeysPayload());
+
+ipcMain.handle('hotkeys-set', (_e, payload: { actionId: string; accelerator: string | null }) => {
+  if (!payload || typeof payload.actionId !== 'string') {
+    return { ok: false, error: 'invalid', current: getHotkeysPayload().current };
+  }
+  return setHotkey(payload.actionId, payload.accelerator ?? null);
+});
+
+ipcMain.handle('hotkeys-reset', () => resetHotkeysToDefaults());
 
 export function ensureVaultUnlockedForUpload(): boolean {
   if (!isVaultLockedBlocking()) return true;
@@ -363,4 +655,8 @@ app.on('before-quit', (e) => {
     console.log('[before-quit] Блокируем выход (isQuitting=false), приложение остаётся в трее');
     e.preventDefault();
   }
+});
+
+app.on('will-quit', () => {
+  unregisterAll();
 });

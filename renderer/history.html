@@ -2,121 +2,354 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>История ссылок</title>
+    <title>Link History</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: Arial, sans-serif;
             background: #f5f5f5;
-            padding: 16px;
+            padding: 14px;
             color: #333;
         }
         .container {
-            max-width: 520px;
+            max-width: 680px;
             margin: 0 auto;
             background: white;
             border-radius: 8px;
-            padding: 16px;
+            padding: 14px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            display: flex;
+            flex-direction: column;
+            min-height: calc(100vh - 28px);
         }
         h1 {
             font-size: 18px;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             color: #2c3e50;
+        }
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        #search {
+            flex: 1;
+            min-width: 160px;
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .chip {
+            border: 1px solid #ddd;
+            background: #f8f9fa;
+            border-radius: 14px;
+            padding: 4px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            color: #444;
+        }
+        .chip.active {
+            background: #3498db;
+            border-color: #3498db;
+            color: #fff;
+        }
+        #list {
+            flex: 1;
+            overflow-y: auto;
         }
         .empty {
             color: #888;
-            padding: 24px 0;
+            padding: 32px 0;
             text-align: center;
+            font-size: 14px;
         }
         .entry {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 10px;
-            padding: 10px 12px;
+            padding: 10px;
             border-radius: 6px;
             margin-bottom: 6px;
             background: #f8f9fa;
             border: 1px solid #eee;
         }
-        .entry:hover {
-            background: #eef1f5;
-        }
-        .method {
-            flex-shrink: 0;
-            font-size: 12px;
-            font-weight: bold;
-            padding: 4px 8px;
+        .entry:hover { background: #eef1f5; }
+        .thumb {
+            width: 72px;
+            height: 54px;
+            object-fit: cover;
             border-radius: 4px;
-            min-width: 56px;
-            text-align: center;
+            background: #e0e0e0;
+            flex-shrink: 0;
+            cursor: pointer;
         }
-        .method.s3 { background: #e8f4fd; color: #1976d2; }
-        .method.ftp { background: #fff3e0; color: #e65100; }
-        .method.ssh { background: #e8f5e9; color: #2e7d32; }
-        .method.api { background: #f3e5f5; color: #7b1fa2; }
-        .method.local { background: #f3e5f5; color: #6a1b9a; }
-        .link-wrap {
+        .thumb.placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: #999;
+            cursor: default;
+        }
+        .body {
             flex: 1;
             min-width: 0;
         }
-        .link {
+        .title {
             font-size: 13px;
             color: #1565c0;
             word-break: break-all;
             cursor: pointer;
         }
-        .link:hover { text-decoration: underline; }
-        .date {
+        .title:hover { text-decoration: underline; }
+        .meta {
             font-size: 11px;
             color: #888;
-            margin-top: 2px;
+            margin-top: 4px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
         }
-        .btn-copy {
+        .method {
+            font-size: 11px;
+            font-weight: bold;
+            padding: 2px 7px;
+            border-radius: 4px;
+        }
+        .method.s3 { background: #e8f4fd; color: #1976d2; }
+        .method.ftp { background: #fff3e0; color: #e65100; }
+        .method.ssh { background: #e8f5e9; color: #2e7d32; }
+        .method.api { background: #f3e5f5; color: #7b1fa2; }
+        .method.local, .method.file { background: #eceff1; color: #455a64; }
+        .method.clipboard { background: #e0f2f1; color: #00695c; }
+        .actions {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
             flex-shrink: 0;
-            padding: 6px 10px;
-            font-size: 12px;
+        }
+        .actions button {
+            padding: 4px 8px;
+            font-size: 11px;
             border: none;
             border-radius: 4px;
             background: #3498db;
             color: white;
             cursor: pointer;
+            white-space: nowrap;
         }
-        .btn-copy:hover { background: #2980b9; }
+        .actions button.secondary { background: #90a4ae; }
+        .actions button.danger { background: #e74c3c; }
+        .actions button:hover { filter: brightness(0.95); }
+        .actions button:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+            filter: none;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1 id="history-title">Link History</h1>
+        <div class="toolbar">
+            <input type="search" id="search" placeholder="Search…">
+            <div class="chips" id="chips"></div>
+        </div>
         <div id="list"></div>
     </div>
     <script>
         const { ipcRenderer } = require('electron');
         const listEl = document.getElementById('list');
+        const searchEl = document.getElementById('search');
+        const chipsEl = document.getElementById('chips');
         const urlParams = new URLSearchParams(window.location.search);
         const lang = urlParams.get('lang') || 'en';
         let __t = {};
+        let allEntries = [];
+        let filterMethod = 'all';
+        let searchQuery = '';
+        let debounceTimer = null;
+
+        const METHOD_FILTERS = ['all', 'local', 'ssh', 'ftp', 's3', 'api', 'clipboard'];
 
         function formatDate(iso) {
             try {
-                const d = new Date(iso);
-                return d.toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
+                return new Date(iso).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
             } catch (e) { return iso || ''; }
         }
 
         function methodClass(method) {
             const m = (method || '').toLowerCase();
-            if (m === 's3') return 's3';
-            if (m === 'ftp') return 'ftp';
-            if (m === 'ssh') return 'ssh';
-            if (m === 'api') return 'api';
+            if (['s3', 'ftp', 'ssh', 'api', 'clipboard', 'local', 'file'].includes(m)) return m;
             return 'local';
         }
 
-        function copy(str) {
-            if (typeof navigator.clipboard !== 'undefined' && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(str);
+        function methodLabel(method) {
+            const m = (method || '').toLowerCase();
+            const map = {
+                s3: 'S3',
+                ftp: 'FTP',
+                ssh: 'SSH',
+                api: 'API',
+                local: __t.history_methodLocal || 'Local',
+                file: __t.history_methodFile || 'File',
+                clipboard: __t.history_methodClipboard || 'Clipboard'
+            };
+            return map[m] || method || '';
+        }
+
+        function escapeHtml(s) {
+            return String(s || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function displayTitle(entry) {
+            if (entry.fileName) return entry.fileName;
+            if (entry.urlOrPath) return entry.urlOrPath;
+            return __t.history_noLink || '(no link)';
+        }
+
+        function matches(entry) {
+            if (filterMethod !== 'all') {
+                const m = entry.method;
+                if (filterMethod === 'local') {
+                    if (m !== 'local' && m !== 'file') return false;
+                } else if (m !== filterMethod) return false;
             }
+            const q = searchQuery.trim().toLowerCase();
+            if (!q) return true;
+            const hay = [
+                entry.urlOrPath,
+                entry.fileName,
+                entry.profileName,
+                entry.method,
+                methodLabel(entry.method)
+            ].join(' ').toLowerCase();
+            return hay.includes(q);
+        }
+
+        function copyText(str) {
+            if (!str) return;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(str).catch(() => {
+                    ipcRenderer.send('copy-text', str);
+                });
+            } else {
+                ipcRenderer.send('copy-text', str);
+            }
+        }
+
+        function renderChips() {
+            const labels = {
+                all: __t.history_filterAll || 'All',
+                local: __t.history_methodLocal || 'Local',
+                ssh: 'SSH',
+                ftp: 'FTP',
+                s3: 'S3',
+                api: 'API',
+                clipboard: __t.history_methodClipboard || 'Clipboard'
+            };
+            chipsEl.innerHTML = METHOD_FILTERS.map((id) => {
+                const active = filterMethod === id ? ' active' : '';
+                return `<button type="button" class="chip${active}" data-method="${id}">${escapeHtml(labels[id])}</button>`;
+            }).join('');
+            chipsEl.querySelectorAll('.chip').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    filterMethod = btn.getAttribute('data-method') || 'all';
+                    renderChips();
+                    renderList();
+                });
+            });
+        }
+
+        function renderList() {
+            const filtered = allEntries.filter(matches);
+            if (allEntries.length === 0) {
+                listEl.innerHTML = '<div class="empty">' + escapeHtml(__t.history_empty || 'No entries.') + '</div>';
+                return;
+            }
+            if (filtered.length === 0) {
+                listEl.innerHTML = '<div class="empty">' + escapeHtml(__t.history_noResults || 'No matching entries.') + '</div>';
+                return;
+            }
+
+            listEl.innerHTML = filtered.map((entry) => {
+                const cls = methodClass(entry.method);
+                const title = escapeHtml(displayTitle(entry));
+                const dateStr = escapeHtml(formatDate(entry.date));
+                const profile = entry.profileName ? escapeHtml(entry.profileName) : '';
+                const thumb = entry.thumbUrl
+                    ? `<img class="thumb" src="${escapeHtml(entry.thumbUrl)}" alt="" data-id="${escapeHtml(entry.id)}" data-action="open">`
+                    : `<div class="thumb placeholder" aria-hidden="true">🖼</div>`;
+                const reeditTitle = entry.canReedit
+                    ? ''
+                    : ` title="${escapeHtml(__t.history_reeditUnavailable || 'Original no longer available')}"`;
+                return `<div class="entry" data-id="${escapeHtml(entry.id)}">
+                    ${thumb}
+                    <div class="body">
+                        <div class="title" data-action="copy">${title}</div>
+                        <div class="meta">
+                            <span class="method ${cls}">${escapeHtml(methodLabel(entry.method))}</span>
+                            <span>${dateStr}</span>
+                            ${profile ? `<span>${profile}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="actions">
+                        <button type="button" data-action="copy">${escapeHtml(__t.history_copy || 'Copy')}</button>
+                        <button type="button" class="secondary" data-action="open" ${entry.canOpenUrl ? '' : 'disabled'}>${escapeHtml(__t.history_open || 'Open')}</button>
+                        <button type="button" class="secondary" data-action="reveal" ${entry.canReveal ? '' : 'disabled'}>${escapeHtml(__t.history_reveal || 'Reveal')}</button>
+                        <button type="button" class="secondary" data-action="reedit" ${entry.canReedit ? '' : 'disabled'}${reeditTitle}>${escapeHtml(__t.history_reedit || 'Re-edit')}</button>
+                        <button type="button" class="danger" data-action="delete">${escapeHtml(__t.history_delete || 'Delete')}</button>
+                    </div>
+                </div>`;
+            }).join('');
+
+            listEl.querySelectorAll('.entry').forEach((el) => {
+                const id = el.getAttribute('data-id');
+                const entry = filtered.find((e) => e.id === id);
+                if (!entry) return;
+                el.querySelectorAll('[data-action]').forEach((node) => {
+                    node.addEventListener('click', async (ev) => {
+                        ev.stopPropagation();
+                        const action = node.getAttribute('data-action');
+                        if (action === 'copy') {
+                            if (entry.urlOrPath) copyText(entry.urlOrPath);
+                            return;
+                        }
+                        if (action === 'open') {
+                            await ipcRenderer.invoke('history-open', id);
+                            return;
+                        }
+                        if (action === 'reveal') {
+                            await ipcRenderer.invoke('history-reveal', id);
+                            return;
+                        }
+                        if (action === 'reedit') {
+                            const r = await ipcRenderer.invoke('history-reedit', id);
+                            if (!r || !r.ok) {
+                                alert(__t.history_reeditUnavailable || 'Original no longer available');
+                            }
+                            return;
+                        }
+                        if (action === 'delete') {
+                            await ipcRenderer.invoke('history-delete', id);
+                            await load();
+                        }
+                    });
+                });
+            });
         }
 
         async function load() {
@@ -126,38 +359,24 @@
                     const titleEl = document.getElementById('history-title');
                     if (titleEl && __t.history_title) titleEl.textContent = __t.history_title;
                     document.title = __t.history_title || document.title;
+                    searchEl.placeholder = __t.history_searchPlaceholder || 'Search…';
                 } catch (e) {}
             }
-            const history = await ipcRenderer.invoke('get-history');
-            const t = __t;
-            if (!history || history.length === 0) {
-                listEl.innerHTML = '<div class="empty">' + (t.history_empty || 'No entries. Save screenshots to server or locally.') + '</div>';
-                return;
-            }
-            listEl.innerHTML = history.map((entry, i) => {
-                const cls = methodClass(entry.method);
-                const dateStr = formatDate(entry.date);
-                const safeLink = (entry.urlOrPath || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                const copyTitle = t.history_clickCopy || 'Click to copy';
-                const copyBtn = t.history_copy || 'Copy';
-                return `<div class="entry" data-index="${i}">
-                    <span class="method ${cls}">${entry.method}</span>
-                    <div class="link-wrap">
-                        <div class="link" title="${copyTitle}">${safeLink}</div>
-                        <div class="date">${dateStr}</div>
-                    </div>
-                    <button class="btn-copy" type="button">${copyBtn}</button>
-                </div>`;
-            }).join('');
-
-            listEl.querySelectorAll('.entry').forEach((el, i) => {
-                const url = history[i].urlOrPath;
-                el.querySelector('.link').addEventListener('click', () => { copy(url); });
-                el.querySelector('.btn-copy').addEventListener('click', () => { copy(url); });
-            });
+            allEntries = await ipcRenderer.invoke('get-history') || [];
+            renderChips();
+            renderList();
         }
 
+        searchEl.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                searchQuery = searchEl.value || '';
+                renderList();
+            }, 180);
+        });
+
         document.addEventListener('DOMContentLoaded', load);
+        window.addEventListener('focus', () => { load(); });
     </script>
 </body>
 </html>

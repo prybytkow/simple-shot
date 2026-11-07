@@ -30,14 +30,33 @@ export class S3Uploader {
         return await getSignedUrl(this.s3Client, command, { expiresIn: 3600 });
     }
 
-  async uploadFile(fileBuffer: Buffer, fileName: string, settings: any): Promise<string> {
+  async uploadFile(
+    fileBuffer: Buffer,
+    fileName: string,
+    settings: any,
+    contentType?: string
+  ): Promise<string> {
     console.log(`🚀 Начало загрузки файла в S3: ${fileName}`);
     console.log(`📊 Размер файла: ${fileBuffer.length} байт`);
     
     this.initializeClient(settings);
     
-    const fileExt = fileName.split('.').pop() || 'png';
-    const key = `screenshots/${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+    const safeName = fileName.replace(/[\\/]/g, '_');
+    const lastDot = safeName.lastIndexOf('.');
+    const stem = lastDot > 0 ? safeName.slice(0, lastDot) : safeName;
+    const ext = lastDot > 0 ? safeName.slice(lastDot) : '';
+    // Prefer original sanitized name; uniquify with timestamp before extension
+    const key = `screenshots/${stem}-${Date.now()}${ext}`;
+    const fileExt = (ext.replace(/^\./, '') || 'bin').toLowerCase();
+    const mime =
+      contentType ||
+      (fileExt === 'jpg' || fileExt === 'jpeg'
+        ? 'image/jpeg'
+        : fileExt === 'webp'
+          ? 'image/webp'
+          : fileExt === 'png'
+            ? 'image/png'
+            : 'application/octet-stream');
     
     console.log(`🔑 Генерация ключа для S3: ${key}`);
 
@@ -49,7 +68,7 @@ export class S3Uploader {
             Bucket: settings.s3.bucket,
             Key: key,
             Body: fileBuffer,
-            ContentType: 'image/png',
+            ContentType: mime,
         });
 
         const response = await this.s3Client.send(command);

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Select a window</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: #1e1f24;
+      color: #f0f0f2;
+      padding: 16px;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .hint {
+      margin: 0 0 16px;
+      font-size: 12px;
+      opacity: 0.7;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+    }
+    .card {
+      background: #2a2b32;
+      border: 1px solid #3a3b44;
+      border-radius: 10px;
+      padding: 10px;
+      cursor: pointer;
+      text-align: left;
+      color: inherit;
+      width: 100%;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .card:hover, .card:focus {
+      border-color: #5b8def;
+      background: #32333c;
+      outline: none;
+    }
+    .card img {
+      width: 100%;
+      height: 120px;
+      object-fit: contain;
+      background: #121317;
+      border-radius: 6px;
+      display: block;
+    }
+    .card .name {
+      margin-top: 8px;
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .empty {
+      opacity: 0.7;
+      font-size: 14px;
+    }
+    .actions {
+      margin-top: 16px;
+      display: flex;
+      justify-content: flex-end;
+    }
+    .btn {
+      background: #3a3b44;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .btn:hover { background: #4a4b55; }
+  </style>
+</head>
+<body>
+  <h1 id="title" data-i18n="capture_pickWindow">Select a window</h1>
+  <p class="hint" id="hint" data-i18n="capture_escHint">Press ESC to cancel</p>
+  <div id="grid" class="grid"></div>
+  <p id="empty" class="empty" style="display:none" data-i18n="capture_noWindows">No windows found</p>
+  <div class="actions">
+    <button type="button" class="btn" id="cancel-btn" data-i18n="capture_cancel">Cancel</button>
+  </div>
+  <script>
+    const { ipcRenderer } = require('electron');
+    let t = {};
+
+    function applyI18n() {
+      document.querySelectorAll('[data-i18n]').forEach((el) => {
+        const key = el.getAttribute('data-i18n');
+        if (t[key]) el.textContent = t[key];
+      });
+      if (t.capture_pickWindow) document.title = t.capture_pickWindow;
+    }
+
+    async function loadTranslations() {
+      const params = new URLSearchParams(location.search);
+      const lang = params.get('lang') || 'system';
+      try {
+        t = (await ipcRenderer.invoke('get-translations', lang)) || {};
+      } catch (_) {
+        t = {};
+      }
+      applyI18n();
+    }
+
+    function render(sources) {
+      const grid = document.getElementById('grid');
+      const empty = document.getElementById('empty');
+      grid.innerHTML = '';
+      if (!sources || sources.length === 0) {
+        empty.style.display = '';
+        return;
+      }
+      empty.style.display = 'none';
+      sources.forEach((s) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'card';
+        btn.title = s.name || '';
+        btn.innerHTML = `<img alt=""><div class="name"></div>`;
+        btn.querySelector('img').src = s.thumbnailDataUrl || '';
+        btn.querySelector('.name').textContent = s.name || s.id;
+        btn.onclick = () => ipcRenderer.send('window-picked', s.id);
+        grid.appendChild(btn);
+      });
+    }
+
+    document.getElementById('cancel-btn').onclick = () => {
+      ipcRenderer.send('window-picker-cancel');
+    };
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') ipcRenderer.send('window-picker-cancel');
+    });
+
+    ipcRenderer.on('window-sources', (_e, sources) => render(sources));
+    loadTranslations();
+  </script>
+</body>
+</html>

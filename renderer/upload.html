@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Upload files</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            padding: 14px;
+            color: #333;
+        }
+        .container {
+            max-width: 480px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 8px;
+            padding: 14px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        }
+        h1 { font-size: 18px; margin-bottom: 6px; color: #2c3e50; }
+        .profile {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 12px;
+        }
+        #drop-zone {
+            border: 2px dashed #90a4ae;
+            border-radius: 8px;
+            padding: 28px 16px;
+            text-align: center;
+            color: #546e7a;
+            background: #fafafa;
+            margin-bottom: 12px;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        #drop-zone.dragover {
+            border-color: #3498db;
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+        #drop-zone p { font-size: 14px; line-height: 1.4; }
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        button {
+            padding: 8px 12px;
+            font-size: 13px;
+            border: none;
+            border-radius: 6px;
+            background: #3498db;
+            color: #fff;
+            cursor: pointer;
+        }
+        button.secondary { background: #90a4ae; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        #queue {
+            max-height: 260px;
+            overflow-y: auto;
+        }
+        .item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            border: 1px solid #eee;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            background: #f8f9fa;
+            font-size: 12px;
+        }
+        .item .name { flex: 1; min-width: 0; word-break: break-all; }
+        .item .meta { color: #888; white-space: nowrap; }
+        .item .status { font-weight: bold; min-width: 70px; text-align: right; }
+        .status.queued { color: #78909c; }
+        .status.uploading { color: #1976d2; }
+        .status.done { color: #2e7d32; }
+        .status.error, .status.skipped { color: #c62828; }
+        .warn { color: #e65100; font-size: 11px; }
+        .msg {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #555;
+            min-height: 1.2em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 id="title">Upload files</h1>
+        <div class="profile" id="profile-line"></div>
+        <div id="drop-zone">
+            <p id="drop-hint">Drop files here to upload</p>
+        </div>
+        <div class="actions">
+            <button type="button" id="choose-btn">Choose files…</button>
+            <button type="button" id="upload-btn" disabled>Upload</button>
+            <button type="button" class="secondary" id="clear-btn">Clear</button>
+        </div>
+        <div id="queue"></div>
+        <div class="msg" id="msg"></div>
+    </div>
+    <script>
+        const { ipcRenderer } = require('electron');
+        const path = require('path');
+        const urlParams = new URLSearchParams(window.location.search);
+        const lang = urlParams.get('lang') || 'en';
+
+        let t = {};
+        let queue = []; // { path, name, size, status, url?, error?, warnSize? }
+        let uploading = false;
+
+        const dropZone = document.getElementById('drop-zone');
+        const queueEl = document.getElementById('queue');
+        const msgEl = document.getElementById('msg');
+        const uploadBtn = document.getElementById('upload-btn');
+        const chooseBtn = document.getElementById('choose-btn');
+        const clearBtn = document.getElementById('clear-btn');
+
+        function formatSize(n) {
+            if (n < 1024) return n + ' B';
+            if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+            return (n / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        function statusLabel(s) {
+            const map = {
+                queued: t.upload_statusQueued || 'Queued',
+                uploading: t.upload_statusUploading || 'Uploading…',
+                done: t.upload_statusDone || 'Done',
+                error: t.upload_statusError || 'Error',
+                skipped: t.upload_statusSkipped || 'Skipped'
+            };
+            return map[s] || s;
+        }
+
+        function render() {
+            uploadBtn.disabled = uploading || queue.filter((q) => q.status === 'queued').length === 0;
+            chooseBtn.disabled = uploading;
+            clearBtn.disabled = uploading;
+
+            if (queue.length === 0) {
+                queueEl.innerHTML = '';
+                return;
+            }
+            queueEl.innerHTML = queue.map((item, i) => {
+                const warn = item.warnSize
+                    ? `<div class="warn">${t.upload_sizeWarn || 'File larger than 100 MB'}</div>`
+                    : '';
+                const err = item.error
+                    ? item.error === 'folder'
+                        ? (t.upload_folderSkipped || 'Folders are not supported')
+                        : item.error
+                    : '';
+                return `<div class="item" data-i="${i}">
+                    <div class="name">${escapeHtml(item.name)}${warn}${err && item.status !== 'queued' ? `<div class="warn">${escapeHtml(err)}</div>` : ''}</div>
+                    <div class="meta">${formatSize(item.size || 0)}</div>
+                    <div class="status ${item.status}">${escapeHtml(statusLabel(item.status))}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function escapeHtml(s) {
+            return String(s || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function addPaths(paths) {
+            const existing = new Set(queue.map((q) => q.path));
+            for (const p of paths) {
+                if (!p || existing.has(p)) continue;
+                if (queue.length >= 20) {
+                    msgEl.textContent = t.upload_maxFiles || 'Maximum 20 files per batch';
+                    break;
+                }
+                const name = path.basename(p);
+                queue.push({
+                    path: p,
+                    name,
+                    size: 0,
+                    status: 'queued',
+                    warnSize: false
+                });
+                existing.add(p);
+            }
+            // sizes via fs in main would be better; approximate from renderer if available
+            try {
+                const fs = require('fs');
+                queue.forEach((q) => {
+                    if (q.size) return;
+                    try {
+                        const st = fs.statSync(q.path);
+                        q.size = st.size;
+                        q.warnSize = st.size > 100 * 1024 * 1024;
+                        if (st.isDirectory()) {
+                            q.status = 'skipped';
+                            q.error = 'folder';
+                        }
+                    } catch (e) {}
+                });
+            } catch (e) {}
+            render();
+        }
+
+        async function loadMeta() {
+            t = await ipcRenderer.invoke('get-translations', lang) || {};
+            document.getElementById('title').textContent = t.upload_title || 'Upload files';
+            document.title = t.upload_title || 'Upload files';
+            document.getElementById('drop-hint').textContent =
+                t.upload_dropHint || 'Drop files here to upload';
+            chooseBtn.textContent = t.upload_choose || 'Choose files…';
+            uploadBtn.textContent = t.upload_start || 'Upload';
+            clearBtn.textContent = t.upload_clear || 'Clear';
+
+            const settings = await ipcRenderer.invoke('get-settings');
+            const profiles = settings.profiles || [];
+            const active = profiles.find((p) => p.id === settings.activeProfileId) || profiles[0];
+            const name = active ? active.name : '—';
+            document.getElementById('profile-line').textContent =
+                (t.upload_activeProfile || 'Active profile') + ': ' + name;
+        }
+
+        dropZone.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            dropZone.classList.add('dragover');
+        });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const files = e.dataTransfer && e.dataTransfer.files;
+            if (!files || !files.length) return;
+            const paths = [];
+            for (let i = 0; i < files.length; i++) {
+                if (files[i].path) paths.push(files[i].path);
+            }
+            addPaths(paths);
+        });
+
+        chooseBtn.onclick = async () => {
+            const result = await ipcRenderer.invoke('pick-upload-files');
+            if (result && result.paths) addPaths(result.paths);
+        };
+
+        clearBtn.onclick = () => {
+            if (uploading) return;
+            queue = [];
+            msgEl.textContent = '';
+            render();
+        };
+
+        uploadBtn.onclick = async () => {
+            const paths = queue.filter((q) => q.status === 'queued').map((q) => q.path);
+            if (!paths.length) return;
+            uploading = true;
+            msgEl.textContent = '';
+            render();
+            const result = await ipcRenderer.invoke('upload-files', { paths });
+            uploading = false;
+            if (result && result.error) {
+                msgEl.textContent = result.error;
+            } else if (result) {
+                const parts = [];
+                if (result.uploaded) parts.push((t.upload_doneCount || 'Uploaded: {n}').replace('{n}', String(result.uploaded)));
+                if (result.failed) parts.push((t.upload_failCount || 'Failed: {n}').replace('{n}', String(result.failed)));
+                if (result.lastUrl) parts.push(t.upload_linkCopied || 'Last URL copied');
+                msgEl.textContent = parts.join(' · ');
+            }
+            render();
+        };
+
+        ipcRenderer.on('upload-files-progress', (_e, payload) => {
+            if (!payload || !payload.path) return;
+            const item = queue.find((q) => q.path === payload.path);
+            if (!item) return;
+            item.status = payload.status || item.status;
+            if (payload.fileName) item.name = payload.fileName;
+            if (payload.url) item.url = payload.url;
+            if (payload.error) item.error = payload.error;
+            if (payload.warnSize) item.warnSize = true;
+            render();
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadMeta();
+            render();
+        });
+    </script>
+</body>
+</html>

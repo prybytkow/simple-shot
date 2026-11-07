@@ -1,13 +1,11 @@
-import { Tray, Menu, nativeImage } from 'electron';
-import * as path from 'path';
+import { Tray, Menu } from 'electron';
 import { setupScreenCapture } from './screen-capture';
+import { createTrayIcon } from './app-icon';
 
+/** Legacy helper; main.ts owns the live tray. */
 export function createTray(): Tray {
-  
-  const iconPath = path.join(__dirname, 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png');
-  const icon = nativeImage.createFromPath(iconPath);
-  const tray = new Tray(icon);
-  
+  const tray = new Tray(createTrayIcon());
+
   const contextMenu = Menu.buildFromTemplate([
     {
       label: 'Capture Area',
@@ -21,13 +19,13 @@ export function createTray(): Tray {
       role: 'quit'
     }
   ]);
-  
+
   tray.setContextMenu(contextMenu);
   tray.setToolTip('Screen Capture Tool');
-  
+
   tray.on('click', () => {
     setupScreenCapture();
   });
-  
+
   return tray;
 }

@@ -4,7 +4,12 @@
  * Auth: X-API-Key (+ Authorization: Bearer).
  */
 export class ApiUploader {
-  async uploadFile(fileBuffer: Buffer, fileName: string, settings: any): Promise<string> {
+  async uploadFile(
+    fileBuffer: Buffer,
+    fileName: string,
+    settings: any,
+    contentType?: string
+  ): Promise<string> {
     const endpoint = (settings.api?.endpoint || '').trim();
     const apiKey = (settings.api?.apiKey || '').trim();
 
@@ -22,9 +27,10 @@ export class ApiUploader {
       throw new Error(`Invalid API endpoint: ${endpoint}`);
     }
 
+    const mime = contentType || 'image/png';
     const form = new FormData();
     const bytes = new Uint8Array(fileBuffer);
-    form.append('image', new Blob([bytes], { type: 'image/png' }), fileName);
+    form.append('image', new Blob([bytes], { type: mime }), fileName);
 
     const response = await fetch(url.toString(), {
       method: 'POST',

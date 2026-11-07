@@ -3,10 +3,14 @@
   "version": "1.0.4",
   "main": "dist/main/main.js",
   "scripts": {
+    "icons": "node scripts/generate-icons.js",
     "build": "tsc && node scripts/copy-build-assets.js",
     "start": "npm run build && electron .",
     "dev": "tsc-watch --onSuccess \"node scripts/copy-build-assets.js && electron .\"",
-    "dist": "npm run build && electron-builder --win"
+    "dist": "npm run build && electron-builder --win",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:linux": "npm run build && electron-builder --linux"
   },
   "build": {
     "appId": "com.simple-shot.app",
@@ -21,6 +25,13 @@
     "asarUnpack": [
       "**/node_modules/koffi/**"
     ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "prybytkow",
+        "repo": "simple-shot"
+      }
+    ],
     "win": {
       "target": [
         {
@@ -30,13 +41,68 @@
           ]
         }
       ],
-      "icon": "dist/main/assets/icon.ico"
+      "icon": "dist/main/assets/icon.ico",
+      "signingHashAlgorithms": [
+        "sha256"
+      ]
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "installerIcon": "dist/main/assets/icon.ico",
       "uninstallerIcon": "dist/main/assets/icon.ico"
+    },
+    "mac": {
+      "category": "public.app-category.graphics-design",
+      "icon": "dist/main/assets/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSScreenCaptureUsageDescription": "Simple Shot needs Screen Recording to capture your screen.",
+        "NSAppleEventsUsageDescription": "Simple Shot may need accessibility-related permissions for global hotkeys."
+      }
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "linux": {
+      "icon": "build/icons",
+      "category": "Graphics",
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "desktop": {
+        "Name": "Simple Shot",
+        "Comment": "Screen capture and upload"
+      }
     }
   },
   "devDependencies": {
@@ -44,6 +110,7 @@
     "@types/ssh2-sftp-client": "^9.0.6",
     "electron": "^44.5.1",
     "electron-builder": "^26.15.3",
+    "png2icons": "^2.0.1",
     "tsc-watch": "^7.2.1",
     "typescript": "^7.0.2"
   },
@@ -51,7 +118,9 @@
     "@aws-sdk/client-s3": "^3.1143.0",
     "@aws-sdk/s3-request-presigner": "^3.1143.0",
     "basic-ftp": "^6.2.1",
+    "electron-updater": "^6.8.11",
     "koffi": "^3.3.2",
+    "sharp": "^0.35.5",
     "ssh2-sftp-client": "^12.1.1"
   },
   "author": "Aliaksei Prybytkou",

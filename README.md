@@ -12,12 +12,13 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"/></a>
   <a href="https://www.electronjs.org/"><img src="https://img.shields.io/badge/Electron-39-47848F?logo=electron" alt="Electron"/></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-18+-339933?logo=node.js" alt="Node.js 18+"/></a>
-  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey" alt="Platform"/>
+  <a href="https://github.com/prybytkow/simple-shot/releases/latest"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey" alt="Platform"/></a>
+  <a href="https://github.com/prybytkow/simple-shot/releases/latest"><img src="https://img.shields.io/github/v/release/prybytkow/simple-shot?label=latest%20release" alt="Latest release"/></a>
 </p>
 
 <p align="center">
-  Capture regions, annotate, add watermarks — save locally or upload via <strong>SFTP</strong>, <strong>FTP</strong>, <strong>S3</strong>, or <strong>HTTP API</strong> (API key).<br/>
-  Runs in the system tray. Multi-monitor, 10 languages.
+  Capture region, screen, or window — annotate, watermark, then save, copy, or upload via <strong>SFTP</strong>, <strong>FTP</strong>, <strong>S3</strong>, or <strong>HTTP API</strong>.<br/>
+  System tray app for <strong>Windows</strong>, <strong>macOS</strong>, and <strong>Linux</strong>. Auto-update, 10 languages.
 </p>
 
 ---
@@ -33,7 +34,7 @@
 - [Internationalization](#-internationalization)
 - [Project Structure](#-project-structure)
 - [Building](#-building)
-- [Windows Installer](#-windows-installer)
+- [Installers & auto-update](#-installers--auto-update)
 - [Contributing](#-contributing)
 - [License](#-license)
 
@@ -47,9 +48,17 @@
 
 ### 📸 Screen capture
 
-- **Multi-display** — Overlay on each monitor; pick a screen and drag to select
+- **Region** — Overlay on each monitor; drag to select
+- **Full screen** — Capture a monitor (picker when several displays)
+- **Window** — Pick a window from thumbnails
+- **Delayed capture** — Countdown 3 / 5 / 10 s (or custom), then default mode
 - **Aspect-ratio crop** — 3:2, 2:3, 4:3, 3:4, 1:1, 16:9 or free
 - **Resize & move** — Handles and drag to adjust the selection
+
+### ⌨️ Global hotkeys
+
+- Configurable shortcuts for region / fullscreen / window / delayed capture, history, and settings
+- Work while the app stays in the tray; conflicts keep the previous binding
 
 ### ✏️ Annotations
 
@@ -66,12 +75,14 @@
 
 ### ☁️ Export & upload
 
-- **Save to file** — PNG via save dialog; path to clipboard
-- **Upload** — URL to clipboard
+- **Formats** — PNG, JPEG, WebP with quality settings
+- **File name templates** — Tokens for date, size, profile, mode, uuid…
+- **Destinations** — Upload, save to file, or clipboard-only (toolbar *Copy*)
 - **SSH (SFTP)** — Host, port, user, password or key, path
 - **FTP / FTPS** — With optional TLS
 - **Amazon S3** — Bucket, region, optional custom endpoint
 - **HTTP API** — Upload endpoint + API key (`X-API-Key` / Bearer)
+- **Drag-and-drop upload** — Tray → *Upload files…*; drop or pick any files (PDF, ZIP, images, …) onto the active profile
 
 ### 🏷️ Watermark
 
@@ -80,9 +91,12 @@
 
 ### 🔗 Other
 
-- **Link history** — Recent uploads/saves; click to copy
+- **Link history** — Thumbnails, search/filters, re-edit, copy / open / delete
+- **Upload profiles + vault** — Named configs; secrets behind master password (scrypt + AES-256-GCM)
+- **Auto-update** — Packaged builds check GitHub Releases (`electron-updater`)
+- **Cross-platform** — Windows NSIS, macOS universal DMG, Linux AppImage / `.deb`
 - **System tray** — Left-click capture, right-click menu
-- **Settings** — Stored in user data
+- **10 languages** — Including System default from OS locale
 
 </td>
 </tr>
@@ -94,9 +108,9 @@
 
 | Capture overlay | Settings |
 |-----------------|----------|
-| *Overlay on each display; drag to select, toolbar for crop and annotations.* | *Language, save method (SSH/FTP/S3/HTTP API), base URL, watermark.* |
+| *Region / screen / window capture; toolbar for crop and annotations.* | *Profiles, vault, hotkeys, export formats, watermark, updates.* |
 
-> After starting capture from the tray, overlay windows appear on each display. Drag to select a region; use the toolbar to crop, annotate, then save to file or upload to server.
+> Start from the tray or a hotkey, annotate if needed, then upload, save (PNG/JPEG/WebP), or copy to the clipboard.
 
 ---
 
@@ -130,15 +144,41 @@ npm run dev
 
 ## 📖 Usage
 
-1. **Start** — Click the tray icon or choose *Capture* from the tray menu.
-2. **Select** — Click and drag on the desired screen to define the region; resize with handles if needed.
-3. **Annotate** (optional) — Use the toolbar: crop, shapes, text, arrows, brush, blur; set format.
-4. **Export** — *Save to file* (PNG, path to clipboard) or *Upload to server* (URL to clipboard).
-5. **History** — Tray → *Link History* to see recent uploads/saves and copy links.
+1. **Start** — Click the tray icon (uses default mode + delay from Settings) or open the *Capture* tray submenu:
+   - **Region** — drag a selection on screen
+   - **Full screen** — capture a monitor (picker if multiple displays)
+   - **Window** — pick a window from thumbnails
+   - **Delayed…** — countdown 3 / 5 / 10 s, then the default mode
+2. **Annotate** (optional) — After selection or capture, use the toolbar: crop, shapes, text, arrows, brush, blur; set format.
+3. **Export** — Use the toolbar or the default destination from Settings:
+   - *Upload* — URL to clipboard
+   - *Save to file* — PNG / JPEG / WebP via save dialog; path to clipboard
+   - *Copy* / clipboard destination — image on the clipboard only
+4. **History** — Tray → *Link History* for thumbnails, search, copy/open, and re-edit when the original frame is still on disk.
+5. **Upload files** — Tray → *Upload files…* to drop or pick arbitrary files onto the active upload profile (folders skipped; last successful URL to clipboard).
+
+### Global hotkeys
+
+Configurable in **Tray → Settings → Hotkeys**. Work while the app is in the tray only.
+
+| Shortcut (default) | Action |
+|--------------------|--------|
+| **Ctrl+Shift+S** (⌘⇧S on macOS) | Capture region |
+| **Ctrl+Shift+A** | Capture fullscreen |
+| **Ctrl+Shift+W** | Capture window |
+| **Ctrl+Shift+D** | Delayed capture (settings delay + default mode) |
+| *(empty by default)* | Open history / Open settings |
+
+If a shortcut is already used by another app, registration fails with a notification; the previous binding is kept.
+
+### Overlay / picker shortcuts
 
 | Shortcut | Action |
 |----------|--------|
-| **ESC** | Cancel capture and hide overlay |
+| **ESC** | Cancel capture overlay, countdown, or window picker (local, not a global hotkey) |
+| **Click countdown** | Cancel delayed capture |
+
+On macOS, Accessibility / Screen Recording permission may be required for global shortcuts and window capture. On Linux (especially Wayland), window capture may be limited — use region or fullscreen instead.
 
 ---
 
@@ -148,12 +188,18 @@ All settings: **Tray → Settings**. Stored in user data (e.g. `%APPDATA%\simple
 
 | Section | Description |
 |---------|-------------|
+| **Capture** | Default mode (region / fullscreen / window) and default delay in seconds (`0` = off) |
 | **Upload profiles** | Named configs (SSH/FTP/S3/API); optional “Show in tray”; one active profile |
 | **Master password vault** | Profiles and secrets encrypted with scrypt + AES-256-GCM. Hidden until unlock (Win/macOS/Linux) |
+| **Hotkeys** | Global shortcuts for capture, history, and settings |
 | **Base URL** | Per-profile prefix for uploaded file links |
 | **Watermark** | Enable, text, position, font size, color, opacity (0–1) |
 | **Language** | Interface language or *System default* |
 | **After upload** | Overlay toast / system notification / link window |
+| **Updates** | Check on startup / auto-download (packaged builds only) |
+| **Export** | File name template (`{yyyy}`, `{uuid}`, `{width}`…), PNG/JPEG/WebP + quality, default destination (upload / file / clipboard). Toolbar *Copy* puts the image on the clipboard |
+| **History** | Thumbnails under user data; search/filters; re-edit opens the annotation UI when the original frame is still available |
+| **Upload files** | Tray window: drop zone + file picker; queue with per-file status; uses the active upload profile (vault unlock if needed) |
 
 ---
 
@@ -169,7 +215,7 @@ All settings: **Tray → Settings**. Stored in user data (e.g. `%APPDATA%\simple
 | `by` | Беларуская | — | — |
 
 - Default: **English**. *System default* uses OS locale with fallback to English.
-- Language is saved and applied to tray, settings, capture overlay, and history.
+- Language is saved and applied to tray, settings, capture overlay, history, and the upload window.
 
 ---
 
@@ -181,23 +227,35 @@ Source and assets are in the repo; `dist/` is generated by the build (gitignored
 simple-shot/
 ├── src/main/              # Main process (TypeScript)
 │   ├── main.ts            # Entry, tray, windows, IPC
+│   ├── app-icon.ts        # Platform tray / window icons
+│   ├── updater.ts         # electron-updater (GitHub Releases)
 │   ├── settings-store.ts  # Profiles + vault persistence
 │   ├── vault-crypto.ts    # scrypt + AES-256-GCM (cross-platform)
 │   ├── screen-capture.ts  # Capture, watermark, save/upload
+│   ├── export-encode.ts   # File name templates + PNG/JPEG/WebP
+│   ├── file-upload.ts     # Drag-drop / picker upload queue
+│   ├── hotkeys.ts         # Global shortcuts registration
 │   ├── i18n.ts            # Translations
-│   ├── history.ts         # Upload/save history
+│   ├── history.ts         # Upload/save history + media thumbs
 │   ├── ssh-handler.ts     # SSH/SFTP
 │   └── uploaders/         # SSH, FTP, S3, HTTP API uploaders
 ├── renderer/              # HTML UIs → dist/renderer
 │   ├── capture-window.html
 │   ├── settings.html
 │   ├── unlock.html        # Master password unlock/setup
-│   └── history.html
+│   ├── history.html
+│   └── upload.html        # Drop zone for arbitrary files
+├── build/
+│   ├── entitlements.mac.plist
+│   └── icons/             # Linux PNG sizes (npm run icons)
 ├── assets/                # Icons → dist/main/assets
 │   ├── icon.png
-│   └── icon.ico
+│   ├── icon.ico
+│   ├── icon.icns
+│   └── iconTemplate.png
 ├── scripts/
-│   └── copy-build-assets.js
+│   ├── copy-build-assets.js
+│   └── generate-icons.js
 ├── package.json
 ├── tsconfig.json
 └── LICENSE
@@ -209,6 +267,7 @@ simple-shot/
 
 | Command | Description |
 |---------|-------------|
+| `npm run icons` | Regenerate `.icns`, macOS tray template, and `build/icons/*` from `assets/icon.png` |
 | `npm run build` | Compile TypeScript, copy renderer + assets to `dist/` |
 | `npm start` | Build (if needed) and run the app |
 | `npm run dev` | Watch mode: rebuild and restart on change |
@@ -217,23 +276,38 @@ Build output: `dist/main/` (JS + assets), `dist/renderer/` (HTML).
 
 ---
 
-## 📦 Windows Installer
+## 📦 Installers & auto-update
 
-Build an installable Windows app (NSIS `.exe` and portable) with [electron-builder](https://www.electron.build/). Run on **Windows**.
+Build with [electron-builder](https://www.electron.build/) **on the target OS** (macOS artifacts need a Mac; Linux packages need Linux). Download prebuilt binaries from the [latest GitHub Release](https://github.com/prybytkow/simple-shot/releases/latest).
 
-```bash
-npm install
-npm run dist
-```
+| Command | Build host | Artifacts in `release/` |
+|---------|------------|-------------------------|
+| `npm run dist` / `dist:win` | Windows | NSIS Setup `.exe` (x64), `win-unpacked/` |
+| `npm run dist:mac` | macOS | Universal `.dmg` + `.zip` (updater) |
+| `npm run dist:linux` | Linux | `.AppImage` + `.deb` (x64) |
 
-Output in **`release/`**:
+| Platform | Typical release files |
+|----------|------------------------|
+| Windows | `Simple Shot Setup x.y.z.exe` |
+| macOS | `Simple Shot-x.y.z-universal.dmg`, matching `.zip` |
+| Linux | `Simple Shot-x.y.z.AppImage`, `.deb` |
 
-| Output | Description |
-|--------|-------------|
-| **Simple Shot Setup 1.0.0.exe** | NSIS installer — choose directory, Start Menu, desktop shortcut |
-| **win-unpacked/** | Portable — run `Simple Shot.exe` without installing |
+Packaged builds check GitHub Releases via `electron-updater` (tray → *Check for updates*; Settings → Updates).
 
-**Icons:** Put `icon.png` and `icon.ico` in `assets/`. They are copied to `dist/main/assets/` on build. Use a multi-size `.ico` (16×16, 32×32, 48×48, 256×256) for best results.
+**Runtime notes:** On macOS, grant **Screen Recording** (and Accessibility for global hotkeys) when prompted. On Linux Wayland, window capture may be limited — use region or fullscreen.
+
+### Code signing (release engineers)
+
+Secrets stay in CI / local env — **never commit `.pfx` or Apple keys**.
+
+| Platform | Variables | Notes |
+|----------|-----------|--------|
+| **Windows** | `CSC_LINK` (`.pfx` path or base64), `CSC_KEY_PASSWORD` | Signs Setup + `Simple Shot.exe`. Without them, builds stay unsigned (fine for local dev). SmartScreen may still warn until the cert has reputation (EV helps). Verify: `signtool verify /pa "Simple Shot Setup X.Y.Z.exe"` |
+| **macOS** | `CSC_LINK` / `CSC_KEY_PASSWORD` (Developer ID), plus `APPLE_ID` + `APPLE_APP_SPECIFIC_PASSWORD` + `APPLE_TEAM_ID` (or App Store Connect API key) | Hardened runtime + `build/entitlements.mac.plist`. electron-builder notarizes when Apple credentials are present. CI sets `CSC_IDENTITY_AUTO_DISCOVERY=false` so unsigned builds do not fail looking for a keychain identity. |
+
+Tag `v*` pushes run [`.github/workflows/release.yml`](.github/workflows/release.yml) (Windows / macOS / Linux) and publish `latest.yml` / `latest-mac.yml` / `latest-linux.yml` for the updater.
+
+**Icons:** Source `assets/icon.png` (+ `icon.ico` for Windows). Run `npm run icons` to refresh `icon.icns`, `iconTemplate.png`, and `build/icons/`. Assets copy to `dist/main/assets/` on `npm run build`.
 
 **Icon not updating?** Clean build: delete `release/` and `dist/`, then `npm run dist`. Clear Windows icon cache (`%LocalAppData%\IconCache.db`, restart Explorer) if needed.
 

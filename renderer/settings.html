@@ -94,13 +94,37 @@
             color: #2c3e50;
             line-height: 1.4;
         }
-            font-size: 11px;
-            background: #27ae60;
-            color: #fff;
-            padding: 2px 8px;
-            border-radius: 10px;
-            margin-left: 6px;
+        .hotkey-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+        .hotkey-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            padding: 8px 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
         }
+        .hotkey-row.disabled { opacity: 0.55; }
+        .hotkey-label { flex: 1; min-width: 120px; font-size: 13px; font-weight: 600; }
+        .hotkey-accel {
+            min-width: 160px;
+            flex: 1;
+            font-family: Consolas, monospace;
+            font-size: 12px;
+            padding: 6px 10px;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            color: #2c3e50;
+        }
+        .hotkey-accel.recording {
+            border-color: #e67e22;
+            background: #fff8f0;
+        }
+        .hotkey-accel.error { border-color: #e74c3c; color: #c0392b; }
+        .hotkey-soon { font-size: 11px; color: #7f8c8d; font-weight: normal; margin-left: 4px; }
+        .hotkey-error { width: 100%; font-size: 11px; color: #c0392b; margin-top: 2px; }
+        .hotkey-actions { display: flex; gap: 6px; flex-wrap: wrap; }
     </style>
 </head>
 <body>
@@ -148,6 +172,68 @@
                 <option value="notification" data-i18n="settings_feedbackNotification">System notification only</option>
                 <option value="window" data-i18n="settings_feedbackWindow">Show link until closed</option>
             </select>
+        </div>
+
+        <div class="section-title" data-i18n="settings_updatesTitle">Updates</div>
+        <div class="form-group">
+            <label class="check-inline">
+                <input type="checkbox" id="updates-auto-check" checked>
+                <span data-i18n="settings_updatesAutoCheck">Check for updates on startup</span>
+            </label>
+        </div>
+        <div class="form-group">
+            <label class="check-inline">
+                <input type="checkbox" id="updates-auto-download" checked>
+                <span data-i18n="settings_updatesAutoDownload">Download updates automatically</span>
+            </label>
+        </div>
+
+        <div class="section-title" data-i18n="settings_exportTitle">Export</div>
+        <div class="form-group">
+            <label for="export-template" data-i18n="settings_exportTemplate">File name template:</label>
+            <input type="text" id="export-template" spellcheck="false" value="screenshot-{yyyy}-{MM}-{dd}_{HH}-{mm}-{ss}">
+            <div id="export-preview" class="hint" style="margin-top:6px;opacity:0.85;"></div>
+        </div>
+        <div class="form-group">
+            <label for="export-format" data-i18n="settings_exportFormat">Format:</label>
+            <select id="export-format">
+                <option value="png">PNG</option>
+                <option value="jpg">JPEG</option>
+                <option value="webp">WebP</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="export-quality" data-i18n="settings_exportQuality">Quality (JPEG / WebP):</label>
+            <input type="range" id="export-quality" min="1" max="100" value="92">
+            <span id="export-quality-value">92</span>
+        </div>
+        <div class="form-group">
+            <label for="export-destination" data-i18n="settings_exportDestination">Default destination:</label>
+            <select id="export-destination">
+                <option value="upload" data-i18n="settings_exportDestUpload">Upload</option>
+                <option value="file" data-i18n="settings_exportDestFile">Save to file</option>
+                <option value="clipboard" data-i18n="settings_exportDestClipboard">Clipboard</option>
+            </select>
+        </div>
+
+        <div class="section-title" data-i18n="settings_hotkeysTitle">Hotkeys</div>
+        <div id="hotkey-list" class="hotkey-list"></div>
+        <div class="hotkey-actions" style="margin-bottom: 14px;">
+            <button type="button" class="btn-secondary btn-small" id="hotkey-reset-btn" data-i18n="settings_hotkeyReset">Reset to defaults</button>
+        </div>
+
+        <div class="section-title" data-i18n="settings_captureTitle">Capture</div>
+        <div class="form-group">
+            <label for="capture-default-mode" data-i18n="settings_captureDefaultMode">Default capture mode:</label>
+            <select id="capture-default-mode">
+                <option value="region" data-i18n="settings_captureModeRegion">Region</option>
+                <option value="fullscreen" data-i18n="settings_captureModeFullscreen">Full screen</option>
+                <option value="window" data-i18n="settings_captureModeWindow">Window</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="capture-delay-seconds" data-i18n="settings_captureDelaySeconds">Default delay (seconds, 0 = off):</label>
+            <input type="number" id="capture-delay-seconds" min="0" max="120" step="1" value="3">
         </div>
 
         <div class="section-title" data-i18n="settings_profilesTitle">Upload profiles</div>
@@ -352,6 +438,17 @@
         let vault = { hasVault: false, isUnlocked: false, needsSetup: false };
         /** Draft secrets typed in UI (not yet saved) */
         let secretDrafts = {};
+        let hotkeyData = { current: {}, defaults: {}, actions: [] };
+        let recordingActionId = null;
+
+        const HOTKEY_LABEL_KEYS = {
+            'capture.region': 'hotkey_captureRegion',
+            'capture.fullscreen': 'hotkey_captureFullscreen',
+            'capture.window': 'hotkey_captureWindow',
+            'capture.delayed': 'hotkey_captureDelayed',
+            'history.open': 'hotkey_historyOpen',
+            'settings.open': 'hotkey_settingsOpen'
+        };
 
         const saveMethodSelect = document.getElementById('saveMethod');
         const sshSection = document.getElementById('ssh-section');
@@ -365,7 +462,172 @@
                 if (t && k && t[k]) el.textContent = t[k];
             });
             if (t.settings_title) document.title = t.settings_title;
+            renderHotkeys();
         }
+
+        function actionLabel(id) {
+            const key = HOTKEY_LABEL_KEYS[id];
+            return (key && t[key]) || id;
+        }
+
+        function formatAccelDisplay(accel) {
+            if (!accel) return '—';
+            return accel
+                .replace(/CommandOrControl/g, process.platform === 'darwin' ? '⌘' : 'Ctrl')
+                .replace(/Command/g, '⌘')
+                .replace(/Control/g, 'Ctrl')
+                .replace(/Option/g, '⌥')
+                .replace(/Alt/g, 'Alt')
+                .replace(/Shift/g, 'Shift')
+                .replace(/\+/g, ' + ');
+        }
+
+        function eventToAccelerator(e) {
+            const parts = [];
+            if (e.ctrlKey || e.metaKey) parts.push('CommandOrControl');
+            if (e.altKey) parts.push('Alt');
+            if (e.shiftKey) parts.push('Shift');
+            let key = e.key;
+            if (!key || key === 'Control' || key === 'Meta' || key === 'Alt' || key === 'Shift') return null;
+            if (key === ' ') key = 'Space';
+            else if (key.length === 1) key = key.toUpperCase();
+            else if (key.startsWith('Arrow')) key = key.replace('Arrow', '');
+            else if (/^F\d+$/i.test(key)) key = key.toUpperCase();
+            else key = key.charAt(0).toUpperCase() + key.slice(1);
+            parts.push(key);
+            if (parts.length < 2) return null;
+            return parts.join('+');
+        }
+
+        function stopRecording() {
+            recordingActionId = null;
+            document.querySelectorAll('.hotkey-accel.recording').forEach((el) => el.classList.remove('recording'));
+        }
+
+        function setRowError(actionId, message) {
+            const err = document.getElementById('hotkey-err-' + actionId);
+            const accelEl = document.getElementById('hotkey-accel-' + actionId);
+            if (err) err.textContent = message || '';
+            if (accelEl) {
+                if (message) accelEl.classList.add('error');
+                else accelEl.classList.remove('error');
+            }
+        }
+
+        function renderHotkeys() {
+            const list = document.getElementById('hotkey-list');
+            if (!list) return;
+            const actions = hotkeyData.actions || [];
+            const current = hotkeyData.current || {};
+            list.innerHTML = '';
+            actions.forEach((action) => {
+                const row = document.createElement('div');
+                row.className = 'hotkey-row' + (action.enabled ? '' : ' disabled');
+                row.dataset.actionId = action.id;
+
+                const label = document.createElement('div');
+                label.className = 'hotkey-label';
+                label.textContent = actionLabel(action.id);
+                if (!action.enabled) {
+                    const soon = document.createElement('span');
+                    soon.className = 'hotkey-soon';
+                    soon.textContent = t.hotkey_soon || 'soon';
+                    label.appendChild(soon);
+                }
+
+                const accel = document.createElement('div');
+                accel.className = 'hotkey-accel';
+                accel.id = 'hotkey-accel-' + action.id;
+                accel.textContent = formatAccelDisplay(current[action.id] || '');
+                if (recordingActionId === action.id) {
+                    accel.classList.add('recording');
+                    accel.textContent = t.settings_hotkeyRecording || 'Press keys…';
+                }
+
+                const actionsEl = document.createElement('div');
+                actionsEl.className = 'hotkey-actions';
+
+                const recordBtn = document.createElement('button');
+                recordBtn.type = 'button';
+                recordBtn.className = 'btn-secondary btn-small';
+                recordBtn.textContent = t.settings_hotkeyRecord || 'Record';
+                recordBtn.disabled = !action.enabled;
+                recordBtn.onclick = () => startRecording(action.id);
+
+                const clearBtn = document.createElement('button');
+                clearBtn.type = 'button';
+                clearBtn.className = 'btn-secondary btn-small';
+                clearBtn.textContent = t.settings_hotkeyClear || 'Clear';
+                clearBtn.disabled = !action.enabled;
+                clearBtn.onclick = () => clearHotkey(action.id);
+
+                actionsEl.appendChild(recordBtn);
+                actionsEl.appendChild(clearBtn);
+
+                const err = document.createElement('div');
+                err.className = 'hotkey-error';
+                err.id = 'hotkey-err-' + action.id;
+
+                row.appendChild(label);
+                row.appendChild(accel);
+                row.appendChild(actionsEl);
+                row.appendChild(err);
+                list.appendChild(row);
+            });
+        }
+
+        async function loadHotkeys() {
+            try {
+                hotkeyData = await ipcRenderer.invoke('hotkeys-get') || hotkeyData;
+            } catch (e) {
+                console.error(e);
+            }
+            renderHotkeys();
+        }
+
+        function startRecording(actionId) {
+            recordingActionId = actionId;
+            setRowError(actionId, '');
+            renderHotkeys();
+        }
+
+        async function clearHotkey(actionId) {
+            stopRecording();
+            setRowError(actionId, '');
+            const result = await ipcRenderer.invoke('hotkeys-set', { actionId, accelerator: null });
+            if (result && result.current) hotkeyData.current = result.current;
+            if (result && !result.ok) {
+                setRowError(actionId, t.hotkey_unavailable || 'Hotkey unavailable');
+            }
+            renderHotkeys();
+        }
+
+        async function applyRecorded(actionId, accelerator) {
+            stopRecording();
+            const result = await ipcRenderer.invoke('hotkeys-set', { actionId, accelerator });
+            if (result && result.current) hotkeyData.current = result.current;
+            if (result && !result.ok) {
+                setRowError(actionId, t.hotkey_unavailable || 'Hotkey unavailable');
+            } else {
+                setRowError(actionId, '');
+            }
+            renderHotkeys();
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (!recordingActionId) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.key === 'Escape') {
+                stopRecording();
+                renderHotkeys();
+                return;
+            }
+            const accel = eventToAccelerator(e);
+            if (!accel) return;
+            const id = recordingActionId;
+            applyRecorded(id, accel);
+        }, true);
 
         function updateVisibleSection() {
             const method = saveMethodSelect.value;
@@ -515,6 +777,37 @@
             document.getElementById('afterUploadFeedback').value =
                 (feedback === 'notification' || feedback === 'window') ? feedback : 'overlay';
 
+            const updates = settings.updates || {};
+            document.getElementById('updates-auto-check').checked = updates.autoCheck !== false;
+            document.getElementById('updates-auto-download').checked = updates.autoDownload !== false;
+
+            const exp = settings.export || {};
+            document.getElementById('export-template').value =
+                exp.fileNameTemplate || 'screenshot-{yyyy}-{MM}-{dd}_{HH}-{mm}-{ss}';
+            const fmt = exp.format === 'jpg' || exp.format === 'webp' ? exp.format : 'png';
+            document.getElementById('export-format').value = fmt;
+            const dest = exp.defaultDestination;
+            document.getElementById('export-destination').value =
+                dest === 'file' || dest === 'clipboard' ? dest : 'upload';
+            const qDefault = fmt === 'webp' ? 90 : 92;
+            const q = fmt === 'jpg'
+                ? (Number(exp.jpegQuality) || 92)
+                : fmt === 'webp'
+                    ? (Number(exp.webpQuality) || 90)
+                    : qDefault;
+            document.getElementById('export-quality').value = String(q);
+            document.getElementById('export-quality-value').textContent = String(q);
+            updateExportQualityUi();
+            refreshExportPreview();
+
+            const cap = settings.capture || {};
+            const mode = cap.defaultMode;
+            document.getElementById('capture-default-mode').value =
+                (mode === 'fullscreen' || mode === 'window') ? mode : 'region';
+            const delay = Number(cap.delaySeconds);
+            document.getElementById('capture-delay-seconds').value =
+                Number.isFinite(delay) && delay >= 0 ? Math.min(120, Math.floor(delay)) : 3;
+
             const w = settings.watermark || {};
             document.getElementById('watermark-enabled').checked = w.enabled || false;
             document.getElementById('watermark-text').value = w.text || '';
@@ -534,6 +827,8 @@
                 });
                 return;
             }
+
+            await loadHotkeys();
 
             const first = profiles.find(p => p.id === activeProfileId) || profiles[0];
             if (first) fillFormFromProfile(first);
@@ -558,12 +853,34 @@
                 };
             });
 
+            const delayRaw = parseInt(document.getElementById('capture-delay-seconds').value, 10);
+            const exportFormat = document.getElementById('export-format').value || 'png';
+            const exportQuality = parseInt(document.getElementById('export-quality').value, 10) || 92;
             const payload = {
                 language: document.getElementById('language').value || 'system',
                 afterUploadFeedback: document.getElementById('afterUploadFeedback').value || 'overlay',
                 activeProfileId,
                 profiles,
                 secretsByProfile,
+                updates: {
+                    autoCheck: document.getElementById('updates-auto-check').checked,
+                    autoDownload: document.getElementById('updates-auto-download').checked
+                },
+                export: {
+                    fileNameTemplate: document.getElementById('export-template').value.trim()
+                        || 'screenshot-{yyyy}-{MM}-{dd}_{HH}-{mm}-{ss}',
+                    format: exportFormat === 'jpg' || exportFormat === 'webp' ? exportFormat : 'png',
+                    jpegQuality: exportFormat === 'jpg' ? exportQuality : 92,
+                    webpQuality: exportFormat === 'webp' ? exportQuality : 90,
+                    defaultDestination: (() => {
+                        const d = document.getElementById('export-destination').value;
+                        return d === 'file' || d === 'clipboard' ? d : 'upload';
+                    })()
+                },
+                capture: {
+                    defaultMode: document.getElementById('capture-default-mode').value || 'region',
+                    delaySeconds: Number.isFinite(delayRaw) && delayRaw >= 0 ? Math.min(120, delayRaw) : 3
+                },
                 watermark: {
                     enabled: document.getElementById('watermark-enabled').checked,
                     text: document.getElementById('watermark-text').value.trim(),
@@ -659,6 +976,52 @@
             await ipcRenderer.invoke('vault-reset');
             await loadAll();
         };
+
+        document.getElementById('hotkey-reset-btn').onclick = async () => {
+            stopRecording();
+            const result = await ipcRenderer.invoke('hotkeys-reset');
+            if (result && result.current) hotkeyData.current = result.current;
+            document.querySelectorAll('.hotkey-error').forEach((el) => { el.textContent = ''; });
+            renderHotkeys();
+        };
+
+        ipcRenderer.on('hotkeys-test-result', (_e, payload) => {
+            if (!payload || !payload.actionId) return;
+            if (payload.ok) setRowError(payload.actionId, '');
+            else setRowError(payload.actionId, t.hotkey_unavailable || 'Hotkey unavailable');
+            if (payload.ok === false && hotkeyData.current) renderHotkeys();
+        });
+
+        function updateExportQualityUi() {
+            const fmt = document.getElementById('export-format').value;
+            const slider = document.getElementById('export-quality');
+            const disabled = fmt === 'png';
+            slider.disabled = disabled;
+            if (fmt === 'jpg' && Number(slider.value) === 90) slider.value = '92';
+            if (fmt === 'webp' && Number(slider.value) === 92) slider.value = '90';
+            document.getElementById('export-quality-value').textContent = slider.value;
+        }
+
+        async function refreshExportPreview() {
+            const template = document.getElementById('export-template').value;
+            const format = document.getElementById('export-format').value || 'png';
+            try {
+                const name = await ipcRenderer.invoke('export-preview-filename', { template, format });
+                const label = t.settings_exportPreview || 'Example';
+                document.getElementById('export-preview').textContent = label + ': ' + (name || '');
+            } catch (e) {
+                document.getElementById('export-preview').textContent = '';
+            }
+        }
+
+        document.getElementById('export-template').addEventListener('input', () => refreshExportPreview());
+        document.getElementById('export-format').addEventListener('change', () => {
+            updateExportQualityUi();
+            refreshExportPreview();
+        });
+        document.getElementById('export-quality').addEventListener('input', (e) => {
+            document.getElementById('export-quality-value').textContent = e.target.value;
+        });
 
         ipcRenderer.on('vault-updated', () => loadAll());
         document.addEventListener('DOMContentLoaded', loadAll);
