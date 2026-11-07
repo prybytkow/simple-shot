@@ -105,8 +105,7 @@
         <div class="msg" id="msg"></div>
     </div>
     <script>
-        const { ipcRenderer } = require('electron');
-        const path = require('path');
+        const api = window.simpleShot;
         const urlParams = new URLSearchParams(window.location.search);
         const lang = urlParams.get('lang') || 'en';
 
@@ -172,15 +171,16 @@
                 .replace(/"/g, '&quot;');
         }
 
-        function addPaths(paths) {
+        async function addPaths(paths) {
             const existing = new Set(queue.map((q) => q.path));
+            const newPaths = [];
             for (const p of paths) {
                 if (!p || existing.has(p)) continue;
                 if (queue.length >= 20) {
                     msgEl.textContent = t.upload_maxFiles || 'Maximum 20 files per batch';
                     break;
                 }
-                const name = path.basename(p);
+                const name = api.basename(p);
                 queue.push({
                     path: p,
                     name,
@@ -189,28 +189,31 @@
                     warnSize: false
                 });
                 existing.add(p);
+                newPaths.push(p);
             }
-            // sizes via fs in main would be better; approximate from renderer if available
-            try {
-                const fs = require('fs');
-                queue.forEach((q) => {
-                    if (q.size) return;
-                    try {
-                        const st = fs.statSync(q.path);
-                        q.size = st.size;
-                        q.warnSize = st.size > 100 * 1024 * 1024;
-                        if (st.isDirectory()) {
-                            q.status = 'skipped';
-                            q.error = 'folder';
+            if (newPaths.length) {
+                try {
+                    const stats = await api.invoke('stat-upload-paths', { paths: newPaths });
+                    if (Array.isArray(stats)) {
+                        for (const st of stats) {
+                            const q = queue.find((x) => x.path === st.path);
+                            if (!q) continue;
+                            if (st.name) q.name = st.name;
+                            q.size = st.size || 0;
+                            q.warnSize = !!st.warnSize;
+                            if (st.isDirectory) {
+                                q.status = 'skipped';
+                                q.error = 'folder';
+                            }
                         }
-                    } catch (e) {}
-                });
-            } catch (e) {}
+                    }
+                } catch (e) {}
+            }
             render();
         }
 
         async function loadMeta() {
-            t = await ipcRenderer.invoke('get-translations', lang) || {};
+            t = await api.invoke('get-translations', lang) || {};
             document.getElementById('title').textContent = t.upload_title || 'Upload files';
             document.title = t.upload_title || 'Upload files';
             document.getElementById('drop-hint').textContent =
@@ -219,7 +222,7 @@
             uploadBtn.textContent = t.upload_start || 'Upload';
             clearBtn.textContent = t.upload_clear || 'Clear';
 
-            const settings = await ipcRenderer.invoke('get-settings');
+            const settings = await api.invoke('get-settings');
             const profiles = settings.profiles || [];
             const active = profiles.find((p) => p.id === settings.activeProfileId) || profiles[0];
             const name = active ? active.name : '—';
@@ -244,14 +247,15 @@
             if (!files || !files.length) return;
             const paths = [];
             for (let i = 0; i < files.length; i++) {
-                if (files[i].path) paths.push(files[i].path);
+                const fp = api.getPathForFile(files[i]);
+                if (fp) paths.push(fp);
             }
-            addPaths(paths);
+            void addPaths(paths);
         });
 
         chooseBtn.onclick = async () => {
-            const result = await ipcRenderer.invoke('pick-upload-files');
-            if (result && result.paths) addPaths(result.paths);
+            const result = await api.invoke('pick-upload-files');
+            if (result && result.paths) await addPaths(result.paths);
         };
 
         clearBtn.onclick = () => {
@@ -267,7 +271,7 @@
             uploading = true;
             msgEl.textContent = '';
             render();
-            const result = await ipcRenderer.invoke('upload-files', { paths });
+            const result = await api.invoke('upload-files', { paths });
             uploading = false;
             if (result && result.error) {
                 msgEl.textContent = result.error;
@@ -281,7 +285,7 @@
             render();
         };
 
-        ipcRenderer.on('upload-files-progress', (_e, payload) => {
+        api.on('upload-files-progress', (payload) => {
             if (!payload || !payload.path) return;
             const item = queue.find((q) => q.path === payload.path);
             if (!item) return;

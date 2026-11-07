@@ -94,7 +94,7 @@
 - **Link history** — Thumbnails, search/filters, re-edit, copy / open / delete
 - **Upload profiles + vault** — Named configs; secrets behind master password (scrypt + AES-256-GCM)
 - **Auto-update** — Packaged builds check GitHub Releases (`electron-updater`)
-- **Cross-platform** — Windows NSIS, macOS universal DMG, Linux AppImage / `.deb`
+- **Cross-platform** — Windows NSIS, macOS DMG (arm64 + x64), Linux AppImage / `.deb`
 - **System tray** — Left-click capture, right-click menu
 - **10 languages** — Including System default from OS locale
 
@@ -195,7 +195,7 @@ All settings: **Tray → Settings**. Stored in user data (e.g. `%APPDATA%\simple
 | **Base URL** | Per-profile prefix for uploaded file links |
 | **Watermark** | Enable, text, position, font size, color, opacity (0–1) |
 | **Language** | Interface language or *System default* |
-| **After upload** | Overlay toast / system notification / link window |
+| **After upload** | Status window auto-close · keep open until closed · progress then system notification |
 | **Updates** | Check on startup / auto-download (packaged builds only) |
 | **Export** | File name template (`{yyyy}`, `{uuid}`, `{width}`…), PNG/JPEG/WebP + quality, default destination (upload / file / clipboard). Toolbar *Copy* puts the image on the clipboard |
 | **History** | Thumbnails under user data; search/filters; re-edit opens the annotation UI when the original frame is still available |
@@ -237,8 +237,10 @@ simple-shot/
 │   ├── hotkeys.ts         # Global shortcuts registration
 │   ├── i18n.ts            # Translations
 │   ├── history.ts         # Upload/save history + media thumbs
-│   ├── ssh-handler.ts     # SSH/SFTP
-│   └── uploaders/         # SSH, FTP, S3, HTTP API uploaders
+│   ├── vault-flow.ts      # Unlock UI hook (no circular imports)
+│   ├── upload-url.ts      # Public URL / history method helpers
+│   ├── window-defaults.ts # Shared BrowserWindow options
+│   └── uploaders/         # SSH, FTP, S3, HTTP API (+ lazy dispatch)
 ├── renderer/              # HTML UIs → dist/renderer
 │   ├── capture-window.html
 │   ├── settings.html
@@ -283,13 +285,13 @@ Build with [electron-builder](https://www.electron.build/) **on the target OS** 
 | Command | Build host | Artifacts in `release/` |
 |---------|------------|-------------------------|
 | `npm run dist` / `dist:win` | Windows | NSIS Setup `.exe` (x64), `win-unpacked/` |
-| `npm run dist:mac` | macOS | Universal `.dmg` + `.zip` (updater) |
+| `npm run dist:mac` | macOS | `.dmg` + `.zip` per arch (arm64, x64) for updater |
 | `npm run dist:linux` | Linux | `.AppImage` + `.deb` (x64) |
 
 | Platform | Typical release files |
 |----------|------------------------|
 | Windows | `Simple Shot Setup x.y.z.exe` |
-| macOS | `Simple Shot-x.y.z-universal.dmg`, matching `.zip` |
+| macOS | `Simple Shot-x.y.z-arm64.dmg` / `-x64.dmg`, matching `.zip` |
 | Linux | `Simple Shot-x.y.z.AppImage`, `.deb` |
 
 Packaged builds check GitHub Releases via `electron-updater` (tray → *Check for updates*; Settings → Updates).

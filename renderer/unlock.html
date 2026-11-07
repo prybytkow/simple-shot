@@ -68,7 +68,7 @@
     </div>
 
     <script>
-        const { ipcRenderer } = require('electron');
+        const api = window.simpleShot;
         const params = new URLSearchParams(window.location.search);
         const mode = params.get('mode') || 'unlock';
         const lang = params.get('lang') || 'system';
@@ -135,11 +135,11 @@
 
             let result;
             if (mode === 'setup') {
-                result = await ipcRenderer.invoke('vault-setup', password);
+                result = await api.invoke('vault-setup', password);
             } else if (mode === 'change') {
-                result = await ipcRenderer.invoke('vault-change-password', oldPassword, password);
+                result = await api.invoke('vault-change-password', oldPassword, password);
             } else {
-                result = await ipcRenderer.invoke('vault-unlock', password);
+                result = await api.invoke('vault-unlock', password);
             }
 
             if (!result || !result.ok) {
@@ -153,11 +153,11 @@
                 showError(map[result && result.error] || (t.vault_errGeneric || 'Failed'));
                 return;
             }
-            await ipcRenderer.invoke('close-unlock-window');
+            await api.invoke('close-unlock-window');
         }
 
         document.getElementById('ok-btn').onclick = () => submit();
-        document.getElementById('cancel-btn').onclick = () => ipcRenderer.invoke('close-unlock-window');
+        document.getElementById('cancel-btn').onclick = () => api.invoke('close-unlock-window');
         document.getElementById('password').addEventListener('keydown', (e) => {
             if (e.key === 'Enter') submit();
         });
@@ -165,7 +165,7 @@
             if (e.key === 'Enter') submit();
         });
 
-        ipcRenderer.invoke('get-translations', lang).then((tr) => {
+        api.invoke('get-translations', lang).then((tr) => {
             t = tr || {};
             applyUi();
         }).catch(() => applyUi());

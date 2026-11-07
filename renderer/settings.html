@@ -4,439 +4,667 @@
     <meta charset="UTF-8">
     <title>Settings</title>
     <style>
+        :root {
+            --bg: #f4f5f7;
+            --surface: #ffffff;
+            --sidebar: #eef0f3;
+            --border: #e2e5ea;
+            --text: #1c2430;
+            --muted: #6b7585;
+            --accent: #0f766e;
+            --accent-hover: #0d9488;
+            --accent-soft: #ccfbf1;
+            --danger: #b91c1c;
+            --danger-bg: #fef2f2;
+            --danger-border: #fecaca;
+            --radius: 8px;
+            --focus: #0f766e;
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
         body {
-            font-family: Segoe UI, Arial, sans-serif;
-            background: #f5f5f5;
-            padding: 20px;
-            color: #333;
-        }
-        .container {
-            max-width: 580px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h1 { text-align: center; margin-bottom: 16px; color: #2c3e50; font-size: 22px; }
-        .form-group { margin-bottom: 14px; }
-        label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px; }
-        input, select {
-            width: 100%;
-            padding: 8px 12px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        input:focus, select:focus { outline: none; border-color: #3498db; }
-        .method-section {
-            display: none;
-            margin-top: 12px;
-            padding: 14px;
-            background: #f8f9fa;
-            border-radius: 4px;
-            border-left: 4px solid #3498db;
-        }
-        .method-section.active { display: block; }
-        .buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; flex-wrap: wrap; }
-        button {
-            padding: 10px 16px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
+            font-family: "Segoe UI", system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
             font-size: 13px;
+            line-height: 1.45;
+            overflow: hidden;
         }
-        .btn-primary { background: #3498db; color: white; }
-        .btn-primary:hover { background: #2980b9; }
-        .btn-secondary { background: #95a5a6; color: white; }
-        .btn-secondary:hover { background: #7f8c8d; }
-        .btn-danger { background: #e74c3c; color: white; }
-        .btn-danger:hover { background: #c0392b; }
-        .btn-small { padding: 6px 10px; font-size: 12px; }
-        .section-title {
-            font-size: 15px;
-            font-weight: bold;
-            margin: 18px 0 10px;
-            padding-bottom: 5px;
-            border-bottom: 2px solid #ecf0f1;
-        }
-        .row { display: flex; gap: 10px; }
-        .row .form-group { flex: 1; }
-        .profiles-bar {
+        .app {
             display: flex;
-            gap: 8px;
-            align-items: center;
-            margin-bottom: 10px;
-            flex-wrap: wrap;
+            flex-direction: column;
+            height: 100%;
         }
-        .profiles-bar select { flex: 1; min-width: 140px; }
+        .app-body {
+            display: flex;
+            flex: 1;
+            min-height: 0;
+        }
+        .sidebar {
+            width: 176px;
+            flex-shrink: 0;
+            background: var(--sidebar);
+            border-right: 1px solid var(--border);
+            padding: 16px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .sidebar-title {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--muted);
+            padding: 4px 10px 10px;
+        }
+        .nav-btn {
+            appearance: none;
+            border: none;
+            background: transparent;
+            text-align: left;
+            padding: 9px 12px;
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            width: 100%;
+        }
+        .nav-btn:hover { background: rgba(15, 118, 110, 0.08); }
+        .nav-btn.active {
+            background: var(--surface);
+            color: var(--accent);
+            box-shadow: 0 0 0 1px var(--border);
+            font-weight: 600;
+        }
+        .main {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            background: var(--surface);
+        }
+        .content {
+            flex: 1;
+            overflow: auto;
+            padding: 20px 24px 12px;
+        }
+        .panel { display: none; }
+        .panel.active { display: block; }
+        .panel-heading {
+            margin-bottom: 16px;
+        }
+        .panel-heading h2 {
+            font-size: 18px;
+            font-weight: 650;
+            color: var(--text);
+        }
+        .panel-heading p {
+            margin-top: 4px;
+            color: var(--muted);
+            font-size: 12px;
+        }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px 16px;
+            margin-bottom: 12px;
+        }
+        .card-title {
+            font-size: 13px;
+            font-weight: 650;
+            margin-bottom: 12px;
+            color: var(--text);
+        }
+        .form-group { margin-bottom: 12px; }
+        .form-group:last-child { margin-bottom: 0; }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            font-size: 12px;
+            color: var(--text);
+        }
+        .hint {
+            margin-top: 5px;
+            font-size: 11px;
+            color: var(--muted);
+        }
+        input[type="text"],
+        input[type="number"],
+        input[type="password"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 13px;
+            background: #fff;
+            color: var(--text);
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--focus);
+            box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+        }
+        input[type="range"] { width: calc(100% - 42px); vertical-align: middle; }
+        input[type="color"] {
+            width: 48px;
+            height: 34px;
+            padding: 2px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
         .check-inline {
             display: flex;
             align-items: center;
             gap: 8px;
-            font-weight: normal;
+            font-weight: 500;
+            cursor: pointer;
         }
         .check-inline input { width: auto; }
-        .vault-box {
-            background: #eef6fc;
-            border: 1px solid #c5dff0;
+        .row { display: flex; gap: 12px; }
+        .row .form-group { flex: 1; min-width: 0; }
+        .method-section {
+            display: none;
+            margin-top: 4px;
+            padding-top: 4px;
+        }
+        .method-section.active { display: block; }
+        .profiles-bar {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .profiles-bar select { flex: 1; min-width: 160px; }
+        .footer {
+            flex-shrink: 0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            padding: 12px 24px;
+            border-top: 1px solid var(--border);
+            background: #fafbfc;
+        }
+        button {
+            padding: 8px 14px;
+            border: none;
             border-radius: 6px;
-            padding: 12px;
-            margin-bottom: 14px;
+            cursor: pointer;
             font-size: 13px;
+            font-weight: 550;
         }
-        .vault-box .status { margin-bottom: 8px; color: #2c3e50; }
-        .vault-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-        .secret-hint { font-size: 11px; color: #7f8c8d; margin-top: 4px; }
+        .btn-primary { background: var(--accent); color: #fff; }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-secondary {
+            background: #fff;
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+        .btn-secondary:hover { background: #f8fafc; }
+        .btn-danger { background: var(--danger); color: #fff; }
+        .btn-danger:hover { background: #991b1b; }
+        .btn-small { padding: 6px 10px; font-size: 12px; }
+        .secret-hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
         .settings-locked {
-            margin: 8px 0 4px;
-            color: #2c3e50;
-            line-height: 1.4;
+            padding: 24px;
+            color: var(--text);
+            max-width: 420px;
         }
-        .hotkey-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+        .settings-locked p { margin-bottom: 12px; color: var(--muted); }
+        .hotkey-list { display: flex; flex-direction: column; gap: 8px; }
         .hotkey-row {
             display: flex;
             align-items: center;
             gap: 8px;
             flex-wrap: wrap;
-            padding: 8px 10px;
-            background: #f8f9fa;
-            border-radius: 4px;
+            padding: 10px 12px;
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: 6px;
         }
         .hotkey-row.disabled { opacity: 0.55; }
         .hotkey-label { flex: 1; min-width: 120px; font-size: 13px; font-weight: 600; }
         .hotkey-accel {
-            min-width: 160px;
+            min-width: 150px;
             flex: 1;
-            font-family: Consolas, monospace;
+            font-family: Consolas, "Cascadia Mono", monospace;
             font-size: 12px;
             padding: 6px 10px;
             background: #fff;
-            border: 1px solid #ddd;
+            border: 1px solid var(--border);
             border-radius: 4px;
-            color: #2c3e50;
+            color: var(--text);
         }
         .hotkey-accel.recording {
-            border-color: #e67e22;
-            background: #fff8f0;
+            border-color: #d97706;
+            background: #fffbeb;
         }
-        .hotkey-accel.error { border-color: #e74c3c; color: #c0392b; }
-        .hotkey-soon { font-size: 11px; color: #7f8c8d; font-weight: normal; margin-left: 4px; }
-        .hotkey-error { width: 100%; font-size: 11px; color: #c0392b; margin-top: 2px; }
+        .hotkey-accel.error { border-color: var(--danger); color: var(--danger); }
+        .hotkey-soon { font-size: 11px; color: var(--muted); font-weight: normal; margin-left: 4px; }
+        .hotkey-error { width: 100%; font-size: 11px; color: var(--danger); margin-top: 2px; }
         .hotkey-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: var(--accent-soft);
+            color: #115e59;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .danger-card {
+            border: 1px solid var(--danger-border);
+            background: var(--danger-bg);
+            border-radius: var(--radius);
+            padding: 14px 16px;
+        }
+        .danger-card h3 {
+            color: var(--danger);
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .danger-card p {
+            color: #7f1d1d;
+            font-size: 12px;
+            margin-bottom: 12px;
+        }
+        .danger-controls { display: none; margin-top: 10px; }
+        .danger-controls.visible { display: block; }
+        .vault-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+        #settings-shell.locked .sidebar,
+        #settings-shell.locked .footer { display: none; }
+        #settings-shell.locked .content { display: flex; align-items: center; justify-content: center; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1 data-i18n="settings_saveTitle">Save Settings</h1>
+    <div class="app" id="settings-shell">
+        <div class="app-body">
+            <aside class="sidebar" id="settings-nav">
+                <div class="sidebar-title" data-i18n="settings_title">Settings</div>
+                <button type="button" class="nav-btn active" data-tab="general" data-i18n="settings_tabGeneral">General</button>
+                <button type="button" class="nav-btn" data-tab="capture" data-i18n="settings_tabCapture">Capture</button>
+                <button type="button" class="nav-btn" data-tab="export" data-i18n="settings_tabExport">Export</button>
+                <button type="button" class="nav-btn" data-tab="upload" data-i18n="settings_tabUpload">Upload</button>
+                <button type="button" class="nav-btn" data-tab="hotkeys" data-i18n="settings_tabHotkeys">Hotkeys</button>
+                <button type="button" class="nav-btn" data-tab="advanced" data-i18n="settings_tabAdvanced">Advanced</button>
+            </aside>
 
-        <div class="vault-box" id="vault-box">
-            <div class="status" id="vault-status-text"></div>
-            <div class="vault-actions">
-                <button type="button" class="btn-primary btn-small" id="vault-unlock-btn" data-i18n="vault_unlock">Unlock</button>
-                <button type="button" class="btn-primary btn-small" id="vault-setup-btn" data-i18n="vault_create">Create vault</button>
-                <button type="button" class="btn-secondary btn-small" id="vault-lock-btn" data-i18n="tray_lockVault">Lock vault</button>
-                <button type="button" class="btn-secondary btn-small" id="vault-change-btn" data-i18n="vault_change">Change password</button>
-                <button type="button" class="btn-danger btn-small" id="vault-reset-btn" data-i18n="vault_reset">Reset vault</button>
-            </div>
-        </div>
-
-        <div id="settings-locked" class="settings-locked" style="display:none">
-            <p id="settings-locked-text" data-i18n="settings_lockedHint">Unlock the vault to view settings.</p>
-        </div>
-
-        <div id="settings-body">
-        <div class="form-group">
-            <label for="language" data-i18n="settings_language">Language</label>
-            <select id="language">
-                <option value="system" data-i18n="settings_systemLanguage">System default</option>
-                <option value="en">English</option>
-                <option value="ru">Русский</option>
-                <option value="zh">中文</option>
-                <option value="pl">Polski</option>
-                <option value="ua">Українська</option>
-                <option value="by">Беларуская</option>
-                <option value="it">Italiano</option>
-                <option value="es">Español</option>
-                <option value="pt">Português</option>
-                <option value="fr">Français</option>
-            </select>
-        </div>
-
-        <div class="section-title" data-i18n="settings_afterUploadTitle">After upload</div>
-        <div class="form-group">
-            <label for="afterUploadFeedback" data-i18n="settings_afterUploadFeedback">Feedback after upload:</label>
-            <select id="afterUploadFeedback">
-                <option value="overlay" data-i18n="settings_feedbackOverlay">Toast on capture screen (auto-close)</option>
-                <option value="notification" data-i18n="settings_feedbackNotification">System notification only</option>
-                <option value="window" data-i18n="settings_feedbackWindow">Show link until closed</option>
-            </select>
-        </div>
-
-        <div class="section-title" data-i18n="settings_updatesTitle">Updates</div>
-        <div class="form-group">
-            <label class="check-inline">
-                <input type="checkbox" id="updates-auto-check" checked>
-                <span data-i18n="settings_updatesAutoCheck">Check for updates on startup</span>
-            </label>
-        </div>
-        <div class="form-group">
-            <label class="check-inline">
-                <input type="checkbox" id="updates-auto-download" checked>
-                <span data-i18n="settings_updatesAutoDownload">Download updates automatically</span>
-            </label>
-        </div>
-
-        <div class="section-title" data-i18n="settings_exportTitle">Export</div>
-        <div class="form-group">
-            <label for="export-template" data-i18n="settings_exportTemplate">File name template:</label>
-            <input type="text" id="export-template" spellcheck="false" value="screenshot-{yyyy}-{MM}-{dd}_{HH}-{mm}-{ss}">
-            <div id="export-preview" class="hint" style="margin-top:6px;opacity:0.85;"></div>
-        </div>
-        <div class="form-group">
-            <label for="export-format" data-i18n="settings_exportFormat">Format:</label>
-            <select id="export-format">
-                <option value="png">PNG</option>
-                <option value="jpg">JPEG</option>
-                <option value="webp">WebP</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label for="export-quality" data-i18n="settings_exportQuality">Quality (JPEG / WebP):</label>
-            <input type="range" id="export-quality" min="1" max="100" value="92">
-            <span id="export-quality-value">92</span>
-        </div>
-        <div class="form-group">
-            <label for="export-destination" data-i18n="settings_exportDestination">Default destination:</label>
-            <select id="export-destination">
-                <option value="upload" data-i18n="settings_exportDestUpload">Upload</option>
-                <option value="file" data-i18n="settings_exportDestFile">Save to file</option>
-                <option value="clipboard" data-i18n="settings_exportDestClipboard">Clipboard</option>
-            </select>
-        </div>
-
-        <div class="section-title" data-i18n="settings_hotkeysTitle">Hotkeys</div>
-        <div id="hotkey-list" class="hotkey-list"></div>
-        <div class="hotkey-actions" style="margin-bottom: 14px;">
-            <button type="button" class="btn-secondary btn-small" id="hotkey-reset-btn" data-i18n="settings_hotkeyReset">Reset to defaults</button>
-        </div>
-
-        <div class="section-title" data-i18n="settings_captureTitle">Capture</div>
-        <div class="form-group">
-            <label for="capture-default-mode" data-i18n="settings_captureDefaultMode">Default capture mode:</label>
-            <select id="capture-default-mode">
-                <option value="region" data-i18n="settings_captureModeRegion">Region</option>
-                <option value="fullscreen" data-i18n="settings_captureModeFullscreen">Full screen</option>
-                <option value="window" data-i18n="settings_captureModeWindow">Window</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label for="capture-delay-seconds" data-i18n="settings_captureDelaySeconds">Default delay (seconds, 0 = off):</label>
-            <input type="number" id="capture-delay-seconds" min="0" max="120" step="1" value="3">
-        </div>
-
-        <div class="section-title" data-i18n="settings_profilesTitle">Upload profiles</div>
-        <div class="profiles-bar">
-            <select id="profile-select"></select>
-            <button type="button" class="btn-secondary btn-small" id="profile-new-btn" data-i18n="settings_profileNew">New</button>
-            <button type="button" class="btn-secondary btn-small" id="profile-dup-btn" data-i18n="settings_profileDuplicate">Duplicate</button>
-            <button type="button" class="btn-danger btn-small" id="profile-del-btn" data-i18n="settings_profileDelete">Delete</button>
-        </div>
-
-        <div class="form-group">
-            <label for="profile-name" data-i18n="settings_profileName">Profile name</label>
-            <input type="text" id="profile-name" placeholder="decalgroup">
-        </div>
-        <div class="form-group">
-            <label class="check-inline">
-                <input type="checkbox" id="profile-show-tray">
-                <span data-i18n="settings_showInTray">Show in tray menu</span>
-            </label>
-        </div>
-        <div class="form-group">
-            <label class="check-inline">
-                <input type="checkbox" id="profile-active">
-                <span data-i18n="settings_setActive">Active profile for uploads</span>
-            </label>
-        </div>
-
-        <div class="form-group">
-            <label for="saveMethod" data-i18n="settings_saveMethod">Save method:</label>
-            <select id="saveMethod">
-                <option value="ssh">SSH (SFTP)</option>
-                <option value="ftp">FTP</option>
-                <option value="s3">Amazon S3</option>
-                <option value="api">HTTP API</option>
-            </select>
-        </div>
-
-        <div class="form-group">
-            <label for="baseUrl" data-i18n="settings_baseUrl">Base URL:</label>
-            <input type="text" id="baseUrl" placeholder="https://vault.by">
-        </div>
-
-        <div id="ssh-section" class="method-section">
-            <div class="section-title" data-i18n="settings_sshTitle">SSH Settings</div>
-            <div class="row">
-                <div class="form-group">
-                    <label for="ssh-host" data-i18n="settings_host">Host:</label>
-                    <input type="text" id="ssh-host" placeholder="example.com">
+            <div class="main">
+                <div id="settings-locked" class="settings-locked" style="display:none">
+                    <p id="settings-locked-text" data-i18n="settings_lockedHint">Unlock the vault to view settings.</p>
+                    <div class="vault-actions">
+                        <button type="button" class="btn-primary btn-small" id="vault-unlock-btn" data-i18n="vault_unlock">Unlock</button>
+                        <button type="button" class="btn-danger btn-small" id="vault-reset-locked-btn" data-i18n="vault_reset">Reset vault</button>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="ssh-port" data-i18n="settings_port">Port:</label>
-                    <input type="number" id="ssh-port" value="22">
-                </div>
-            </div>
-            <div class="row">
-                <div class="form-group">
-                    <label for="ssh-username" data-i18n="settings_username">Username:</label>
-                    <input type="text" id="ssh-username" placeholder="username">
-                </div>
-                <div class="form-group">
-                    <label for="ssh-password" data-i18n="settings_password">Password:</label>
-                    <input type="password" id="ssh-password" placeholder="" autocomplete="off">
-                    <div class="secret-hint" id="ssh-password-hint"></div>
-                </div>
-            </div>
-            <div class="form-group">
-                <label for="ssh-privateKey" data-i18n="settings_privateKeyPath">Private key path:</label>
-                <input type="text" id="ssh-privateKey" placeholder="/path/to/private/key">
-            </div>
-            <div class="form-group">
-                <label for="ssh-destination" data-i18n="settings_destinationPath">Destination path:</label>
-                <input type="text" id="ssh-destination" placeholder="/uploads" value="/uploads">
-            </div>
-        </div>
 
-        <div id="ftp-section" class="method-section">
-            <div class="section-title" data-i18n="settings_ftpTitle">FTP Settings</div>
-            <div class="row">
-                <div class="form-group">
-                    <label for="ftp-host" data-i18n="settings_host">Host:</label>
-                    <input type="text" id="ftp-host" placeholder="ftp.example.com">
-                </div>
-                <div class="form-group">
-                    <label for="ftp-port" data-i18n="settings_port">Port:</label>
-                    <input type="number" id="ftp-port" value="21">
-                </div>
-            </div>
-            <div class="row">
-                <div class="form-group">
-                    <label for="ftp-username" data-i18n="settings_username">Username:</label>
-                    <input type="text" id="ftp-username" placeholder="username">
-                </div>
-                <div class="form-group">
-                    <label for="ftp-password" data-i18n="settings_password">Password:</label>
-                    <input type="password" id="ftp-password" autocomplete="off">
-                    <div class="secret-hint" id="ftp-password-hint"></div>
-                </div>
-            </div>
-            <div class="form-group">
-                <label for="ftp-destination" data-i18n="settings_destinationPath">Destination path:</label>
-                <input type="text" id="ftp-destination" placeholder="/uploads" value="/uploads">
-            </div>
-            <div class="form-group">
-                <label class="check-inline">
-                    <input type="checkbox" id="ftp-secure">
-                    <span data-i18n="settings_secureFtp">Secure connection (FTPS)</span>
-                </label>
-            </div>
-        </div>
+                <div class="content" id="settings-body">
+                    <!-- General -->
+                    <section class="panel active" id="panel-general">
+                        <div class="panel-heading">
+                            <h2 data-i18n="settings_tabGeneral">General</h2>
+                        </div>
+                        <div class="card">
+                            <div class="form-group">
+                                <label for="language" data-i18n="settings_language">Language</label>
+                                <select id="language">
+                                    <option value="system" data-i18n="settings_systemLanguage">System default</option>
+                                    <option value="en">English</option>
+                                    <option value="ru">Русский</option>
+                                    <option value="zh">中文</option>
+                                    <option value="pl">Polski</option>
+                                    <option value="ua">Українська</option>
+                                    <option value="by">Беларуская</option>
+                                    <option value="it">Italiano</option>
+                                    <option value="es">Español</option>
+                                    <option value="pt">Português</option>
+                                    <option value="fr">Français</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-title" data-i18n="settings_afterUploadTitle">After upload</div>
+                            <div class="form-group">
+                                <label for="afterUploadFeedback" data-i18n="settings_afterUploadFeedback">Feedback after upload:</label>
+                                <select id="afterUploadFeedback">
+                                    <option value="overlay" data-i18n="settings_feedbackOverlay">Status window, then auto-close</option>
+                                    <option value="notification" data-i18n="settings_feedbackNotification">Status while uploading, then system notification</option>
+                                    <option value="window" data-i18n="settings_feedbackWindow">Status window until you close it</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-title" data-i18n="settings_updatesTitle">Updates</div>
+                            <div class="form-group">
+                                <label class="check-inline">
+                                    <input type="checkbox" id="updates-auto-check" checked>
+                                    <span data-i18n="settings_updatesAutoCheck">Check for updates on startup</span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label class="check-inline">
+                                    <input type="checkbox" id="updates-auto-download" checked>
+                                    <span data-i18n="settings_updatesAutoDownload">Download updates automatically</span>
+                                </label>
+                            </div>
+                        </div>
+                    </section>
 
-        <div id="s3-section" class="method-section">
-            <div class="section-title" data-i18n="settings_s3Title">Amazon S3 Settings</div>
-            <div class="form-group">
-                <label for="s3-accessKey" data-i18n="settings_accessKeyId">Access Key ID:</label>
-                <input type="text" id="s3-accessKey" placeholder="AKIA…">
-            </div>
-            <div class="form-group">
-                <label for="s3-secretKey" data-i18n="settings_secretKey">Secret Access Key:</label>
-                <input type="password" id="s3-secretKey" autocomplete="off">
-                <div class="secret-hint" id="s3-secret-hint"></div>
-            </div>
-            <div class="row">
-                <div class="form-group">
-                    <label for="s3-bucket" data-i18n="settings_bucket">Bucket:</label>
-                    <input type="text" id="s3-bucket">
+                    <!-- Capture -->
+                    <section class="panel" id="panel-capture">
+                        <div class="panel-heading">
+                            <h2 data-i18n="settings_tabCapture">Capture</h2>
+                        </div>
+                        <div class="card">
+                            <div class="card-title" data-i18n="settings_captureTitle">Capture</div>
+                            <div class="form-group">
+                                <label for="capture-default-mode" data-i18n="settings_captureDefaultMode">Default capture mode:</label>
+                                <select id="capture-default-mode">
+                                    <option value="region" data-i18n="settings_captureModeRegion">Region</option>
+                                    <option value="fullscreen" data-i18n="settings_captureModeFullscreen">Full screen</option>
+                                    <option value="window" data-i18n="settings_captureModeWindow">Window</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="capture-delay-seconds" data-i18n="settings_captureDelaySeconds">Default delay (seconds, 0 = off):</label>
+                                <input type="number" id="capture-delay-seconds" min="0" max="120" step="1" value="3">
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-title" data-i18n="settings_watermarkTitle">Watermark</div>
+                            <div class="form-group">
+                                <label class="check-inline">
+                                    <input type="checkbox" id="watermark-enabled">
+                                    <span data-i18n="settings_watermarkEnabled">Enable watermark on saved screenshots</span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label for="watermark-text" data-i18n="settings_watermarkText">Watermark text:</label>
+                                <input type="text" id="watermark-text">
+                            </div>
+                            <div class="form-group">
+                                <label for="watermark-position" data-i18n="settings_position">Position:</label>
+                                <select id="watermark-position">
+                                    <option value="top-left" data-i18n="settings_topLeft">Top left</option>
+                                    <option value="top-right" data-i18n="settings_topRight">Top right</option>
+                                    <option value="bottom-left" data-i18n="settings_bottomLeft">Bottom left</option>
+                                    <option value="bottom-right" data-i18n="settings_bottomRight">Bottom right</option>
+                                    <option value="center" data-i18n="settings_center">Center</option>
+                                </select>
+                            </div>
+                            <div class="row">
+                                <div class="form-group">
+                                    <label for="watermark-fontSize" data-i18n="settings_fontSizePx">Font size (px):</label>
+                                    <input type="number" id="watermark-fontSize" min="8" max="120" value="24">
+                                </div>
+                                <div class="form-group">
+                                    <label for="watermark-color" data-i18n="settings_color">Color:</label>
+                                    <input type="color" id="watermark-color" value="#ffffff">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="watermark-opacity" data-i18n="settings_opacity">Opacity (0–1):</label>
+                                <input type="number" id="watermark-opacity" min="0" max="1" step="0.1" value="0.5">
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Export -->
+                    <section class="panel" id="panel-export">
+                        <div class="panel-heading">
+                            <h2 data-i18n="settings_tabExport">Export</h2>
+                        </div>
+                        <div class="card">
+                            <div class="card-title" data-i18n="settings_exportTitle">Export</div>
+                            <div class="form-group">
+                                <label for="export-template" data-i18n="settings_exportTemplate">File name template:</label>
+                                <input type="text" id="export-template" spellcheck="false" value="screenshot-{yyyy}-{MM}-{dd}_{HH}-{mm}-{ss}">
+                                <div id="export-preview" class="hint"></div>
+                            </div>
+                            <div class="form-group">
+                                <label for="export-format" data-i18n="settings_exportFormat">Format:</label>
+                                <select id="export-format">
+                                    <option value="png">PNG</option>
+                                    <option value="jpg">JPEG</option>
+                                    <option value="webp">WebP</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="export-quality" data-i18n="settings_exportQuality">Quality (JPEG / WebP):</label>
+                                <input type="range" id="export-quality" min="1" max="100" value="92">
+                                <span id="export-quality-value">92</span>
+                            </div>
+                            <div class="form-group">
+                                <label for="export-destination" data-i18n="settings_exportDestination">Default destination:</label>
+                                <select id="export-destination">
+                                    <option value="upload" data-i18n="settings_exportDestUpload">Upload</option>
+                                    <option value="file" data-i18n="settings_exportDestFile">Save to file</option>
+                                    <option value="clipboard" data-i18n="settings_exportDestClipboard">Clipboard</option>
+                                </select>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Upload -->
+                    <section class="panel" id="panel-upload">
+                        <div class="panel-heading">
+                            <h2 data-i18n="settings_tabUpload">Upload</h2>
+                        </div>
+                        <div class="card">
+                            <div class="card-title" data-i18n="settings_profilesTitle">Upload profiles</div>
+                            <div class="profiles-bar">
+                                <select id="profile-select"></select>
+                                <button type="button" class="btn-secondary btn-small" id="profile-new-btn" data-i18n="settings_profileNew">New</button>
+                                <button type="button" class="btn-secondary btn-small" id="profile-dup-btn" data-i18n="settings_profileDuplicate">Duplicate</button>
+                                <button type="button" class="btn-danger btn-small" id="profile-del-btn" data-i18n="settings_profileDelete">Delete</button>
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-name" data-i18n="settings_profileName">Profile name</label>
+                                <input type="text" id="profile-name" placeholder="decalgroup">
+                            </div>
+                            <div class="form-group">
+                                <label class="check-inline">
+                                    <input type="checkbox" id="profile-show-tray">
+                                    <span data-i18n="settings_showInTray">Show in tray menu</span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label class="check-inline">
+                                    <input type="checkbox" id="profile-active">
+                                    <span data-i18n="settings_setActive">Active profile for uploads</span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label for="saveMethod" data-i18n="settings_saveMethod">Save method:</label>
+                                <select id="saveMethod">
+                                    <option value="ssh">SSH (SFTP)</option>
+                                    <option value="ftp">FTP</option>
+                                    <option value="s3">Amazon S3</option>
+                                    <option value="api">HTTP API</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="baseUrl" data-i18n="settings_baseUrl">Base URL:</label>
+                                <input type="text" id="baseUrl" placeholder="https://vault.by">
+                            </div>
+                        </div>
+
+                        <div id="ssh-section" class="method-section card">
+                            <div class="card-title" data-i18n="settings_sshTitle">SSH Settings</div>
+                            <div class="row">
+                                <div class="form-group">
+                                    <label for="ssh-host" data-i18n="settings_host">Host:</label>
+                                    <input type="text" id="ssh-host" placeholder="example.com">
+                                </div>
+                                <div class="form-group">
+                                    <label for="ssh-port" data-i18n="settings_port">Port:</label>
+                                    <input type="number" id="ssh-port" value="22">
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="form-group">
+                                    <label for="ssh-username" data-i18n="settings_username">Username:</label>
+                                    <input type="text" id="ssh-username" placeholder="username">
+                                </div>
+                                <div class="form-group">
+                                    <label for="ssh-password" data-i18n="settings_password">Password:</label>
+                                    <input type="password" id="ssh-password" placeholder="" autocomplete="off">
+                                    <div class="secret-hint" id="ssh-password-hint"></div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="ssh-privateKey" data-i18n="settings_privateKeyPath">Private key path:</label>
+                                <input type="text" id="ssh-privateKey" placeholder="/path/to/private/key">
+                            </div>
+                            <div class="form-group">
+                                <label for="ssh-destination" data-i18n="settings_destinationPath">Destination path:</label>
+                                <input type="text" id="ssh-destination" placeholder="/uploads" value="/uploads">
+                            </div>
+                        </div>
+
+                        <div id="ftp-section" class="method-section card">
+                            <div class="card-title" data-i18n="settings_ftpTitle">FTP Settings</div>
+                            <div class="row">
+                                <div class="form-group">
+                                    <label for="ftp-host" data-i18n="settings_host">Host:</label>
+                                    <input type="text" id="ftp-host" placeholder="ftp.example.com">
+                                </div>
+                                <div class="form-group">
+                                    <label for="ftp-port" data-i18n="settings_port">Port:</label>
+                                    <input type="number" id="ftp-port" value="21">
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="form-group">
+                                    <label for="ftp-username" data-i18n="settings_username">Username:</label>
+                                    <input type="text" id="ftp-username" placeholder="username">
+                                </div>
+                                <div class="form-group">
+                                    <label for="ftp-password" data-i18n="settings_password">Password:</label>
+                                    <input type="password" id="ftp-password" autocomplete="off">
+                                    <div class="secret-hint" id="ftp-password-hint"></div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="ftp-destination" data-i18n="settings_destinationPath">Destination path:</label>
+                                <input type="text" id="ftp-destination" placeholder="/uploads" value="/uploads">
+                            </div>
+                            <div class="form-group">
+                                <label class="check-inline">
+                                    <input type="checkbox" id="ftp-secure">
+                                    <span data-i18n="settings_secureFtp">Secure connection (FTPS)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div id="s3-section" class="method-section card">
+                            <div class="card-title" data-i18n="settings_s3Title">Amazon S3 Settings</div>
+                            <div class="form-group">
+                                <label for="s3-accessKey" data-i18n="settings_accessKeyId">Access Key ID:</label>
+                                <input type="text" id="s3-accessKey" placeholder="AKIA…">
+                            </div>
+                            <div class="form-group">
+                                <label for="s3-secretKey" data-i18n="settings_secretKey">Secret Access Key:</label>
+                                <input type="password" id="s3-secretKey" autocomplete="off">
+                                <div class="secret-hint" id="s3-secret-hint"></div>
+                            </div>
+                            <div class="row">
+                                <div class="form-group">
+                                    <label for="s3-bucket" data-i18n="settings_bucket">Bucket:</label>
+                                    <input type="text" id="s3-bucket">
+                                </div>
+                                <div class="form-group">
+                                    <label for="s3-region" data-i18n="settings_region">Region:</label>
+                                    <input type="text" id="s3-region" value="us-east-1">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="s3-endpoint" data-i18n="settings_endpointOptional">Endpoint (optional):</label>
+                                <input type="text" id="s3-endpoint">
+                            </div>
+                        </div>
+
+                        <div id="api-section" class="method-section card">
+                            <div class="card-title" data-i18n="settings_apiTitle">HTTP API Settings</div>
+                            <div class="form-group">
+                                <label for="api-endpoint" data-i18n="settings_apiEndpoint">Upload endpoint:</label>
+                                <input type="text" id="api-endpoint" placeholder="https://example.com/upload">
+                            </div>
+                            <div class="form-group">
+                                <label for="api-key" data-i18n="settings_apiKey">API key:</label>
+                                <input type="password" id="api-key" autocomplete="off">
+                                <div class="secret-hint" id="api-key-hint"></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Hotkeys -->
+                    <section class="panel" id="panel-hotkeys">
+                        <div class="panel-heading">
+                            <h2 data-i18n="settings_tabHotkeys">Hotkeys</h2>
+                        </div>
+                        <div class="card">
+                            <div id="hotkey-list" class="hotkey-list"></div>
+                            <div class="hotkey-actions" style="margin-top: 12px;">
+                                <button type="button" class="btn-secondary btn-small" id="hotkey-reset-btn" data-i18n="settings_hotkeyReset">Reset to defaults</button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Advanced -->
+                    <section class="panel" id="panel-advanced">
+                        <div class="panel-heading">
+                            <h2 data-i18n="settings_tabAdvanced">Advanced</h2>
+                        </div>
+                        <div class="card">
+                            <div class="card-title" data-i18n="settings_encryptionTitle">Encryption</div>
+                            <div class="status-pill" id="vault-status-text">Encrypted</div>
+                            <div class="vault-actions">
+                                <button type="button" class="btn-primary btn-small" id="vault-setup-btn" data-i18n="vault_create" style="display:none">Create vault</button>
+                                <button type="button" class="btn-secondary btn-small" id="vault-lock-btn" data-i18n="tray_lockVault" style="display:none">Lock vault</button>
+                                <button type="button" class="btn-secondary btn-small" id="vault-change-btn" data-i18n="vault_change" style="display:none">Change password</button>
+                            </div>
+                        </div>
+                        <div class="danger-card">
+                            <h3 data-i18n="settings_dangerZone">Danger zone</h3>
+                            <p data-i18n="settings_dangerZoneHint">Irreversible actions. Use only if you know what you are doing.</p>
+                            <label class="check-inline">
+                                <input type="checkbox" id="danger-reveal">
+                                <span data-i18n="settings_showDangerControls">Show destructive actions</span>
+                            </label>
+                            <div class="danger-controls" id="danger-controls">
+                                <button type="button" class="btn-danger btn-small" id="vault-reset-btn" data-i18n="vault_reset">Reset vault</button>
+                            </div>
+                        </div>
+                    </section>
                 </div>
-                <div class="form-group">
-                    <label for="s3-region" data-i18n="settings_region">Region:</label>
-                    <input type="text" id="s3-region" value="us-east-1">
+
+                <div class="footer" id="settings-footer">
+                    <button id="cancel-btn" class="btn-secondary" data-i18n="settings_cancel">Cancel</button>
+                    <button id="save-btn" class="btn-primary" data-i18n="settings_save">Save</button>
                 </div>
             </div>
-            <div class="form-group">
-                <label for="s3-endpoint" data-i18n="settings_endpointOptional">Endpoint (optional):</label>
-                <input type="text" id="s3-endpoint">
-            </div>
-        </div>
-
-        <div id="api-section" class="method-section">
-            <div class="section-title" data-i18n="settings_apiTitle">HTTP API Settings</div>
-            <div class="form-group">
-                <label for="api-endpoint" data-i18n="settings_apiEndpoint">Upload endpoint:</label>
-                <input type="text" id="api-endpoint" placeholder="https://example.com/upload">
-            </div>
-            <div class="form-group">
-                <label for="api-key" data-i18n="settings_apiKey">API key:</label>
-                <input type="password" id="api-key" autocomplete="off">
-                <div class="secret-hint" id="api-key-hint"></div>
-            </div>
-        </div>
-
-        <div class="section-title" data-i18n="settings_watermarkTitle">Watermark</div>
-        <div class="form-group">
-            <label class="check-inline">
-                <input type="checkbox" id="watermark-enabled">
-                <span data-i18n="settings_watermarkEnabled">Enable watermark on saved screenshots</span>
-            </label>
-        </div>
-        <div class="form-group">
-            <label for="watermark-text" data-i18n="settings_watermarkText">Watermark text:</label>
-            <input type="text" id="watermark-text">
-        </div>
-        <div class="form-group">
-            <label for="watermark-position" data-i18n="settings_position">Position:</label>
-            <select id="watermark-position">
-                <option value="top-left" data-i18n="settings_topLeft">Top left</option>
-                <option value="top-right" data-i18n="settings_topRight">Top right</option>
-                <option value="bottom-left" data-i18n="settings_bottomLeft">Bottom left</option>
-                <option value="bottom-right" data-i18n="settings_bottomRight">Bottom right</option>
-                <option value="center" data-i18n="settings_center">Center</option>
-            </select>
-        </div>
-        <div class="row">
-            <div class="form-group">
-                <label for="watermark-fontSize" data-i18n="settings_fontSizePx">Font size (px):</label>
-                <input type="number" id="watermark-fontSize" min="8" max="120" value="24">
-            </div>
-            <div class="form-group">
-                <label for="watermark-color" data-i18n="settings_color">Color:</label>
-                <input type="color" id="watermark-color" value="#ffffff">
-            </div>
-        </div>
-        <div class="form-group">
-            <label for="watermark-opacity" data-i18n="settings_opacity">Opacity (0–1):</label>
-            <input type="number" id="watermark-opacity" min="0" max="1" step="0.1" value="0.5">
-        </div>
-
-        <div class="buttons">
-            <button id="cancel-btn" class="btn-secondary" data-i18n="settings_cancel">Cancel</button>
-            <button id="save-btn" class="btn-primary" data-i18n="settings_save">Save</button>
-        </div>
         </div>
     </div>
 
     <script>
-        const { ipcRenderer } = require('electron');
+        const api = window.simpleShot;
 
         let t = {};
         let profiles = [];
         let activeProfileId = '';
         let currentProfileId = '';
         let secretFlags = {};
-        let vault = { hasVault: false, isUnlocked: false, needsSetup: false };
-        /** Draft secrets typed in UI (not yet saved) */
+        let vault = { hasVault: false, isUnlocked: false, needsSetup: false, needsLegacyUnlock: false };
         let secretDrafts = {};
         let hotkeyData = { current: {}, defaults: {}, actions: [] };
         let recordingActionId = null;
@@ -455,6 +683,23 @@
         const ftpSection = document.getElementById('ftp-section');
         const s3Section = document.getElementById('s3-section');
         const apiSection = document.getElementById('api-section');
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.nav-btn').forEach((btn) => {
+                btn.classList.toggle('active', btn.dataset.tab === tabId);
+            });
+            document.querySelectorAll('.panel').forEach((panel) => {
+                panel.classList.toggle('active', panel.id === 'panel-' + tabId);
+            });
+        }
+
+        document.querySelectorAll('.nav-btn').forEach((btn) => {
+            btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+        });
+
+        document.getElementById('danger-reveal').addEventListener('change', (e) => {
+            document.getElementById('danger-controls').classList.toggle('visible', !!e.target.checked);
+        });
 
         function applyTranslations() {
             document.querySelectorAll('[data-i18n]').forEach(el => {
@@ -578,7 +823,7 @@
 
         async function loadHotkeys() {
             try {
-                hotkeyData = await ipcRenderer.invoke('hotkeys-get') || hotkeyData;
+                hotkeyData = await api.invoke('hotkeys-get') || hotkeyData;
             } catch (e) {
                 console.error(e);
             }
@@ -594,7 +839,7 @@
         async function clearHotkey(actionId) {
             stopRecording();
             setRowError(actionId, '');
-            const result = await ipcRenderer.invoke('hotkeys-set', { actionId, accelerator: null });
+            const result = await api.invoke('hotkeys-set', { actionId, accelerator: null });
             if (result && result.current) hotkeyData.current = result.current;
             if (result && !result.ok) {
                 setRowError(actionId, t.hotkey_unavailable || 'Hotkey unavailable');
@@ -604,7 +849,7 @@
 
         async function applyRecorded(actionId, accelerator) {
             stopRecording();
-            const result = await ipcRenderer.invoke('hotkeys-set', { actionId, accelerator });
+            const result = await api.invoke('hotkeys-set', { actionId, accelerator });
             if (result && result.current) hotkeyData.current = result.current;
             if (result && !result.ok) {
                 setRowError(actionId, t.hotkey_unavailable || 'Hotkey unavailable');
@@ -640,17 +885,18 @@
 
         function updateVaultUi() {
             const statusEl = document.getElementById('vault-status-text');
-            let text = t.vault_statusNone || 'No vault — set a master password to encrypt upload credentials.';
-            if (vault.hasVault && vault.isUnlocked) text = t.vault_statusUnlocked || 'Vault unlocked — secrets available.';
-            else if (vault.hasVault) text = t.vault_statusLocked || 'Vault locked — unlock to edit or use secrets.';
-            else if (vault.needsSetup) text = t.vault_statusNeedsSetup || 'Secrets pending — create a master password to encrypt them.';
+            let text = t.vault_statusEncrypted || 'Settings are encrypted on this device.';
+            if (vault.hasVault && !vault.isUnlocked) {
+                text = t.vault_statusLocked || 'Vault locked — unlock once to migrate settings.';
+            }
             statusEl.textContent = text;
 
-            document.getElementById('vault-unlock-btn').style.display = vault.hasVault && !vault.isUnlocked ? '' : 'none';
-            document.getElementById('vault-setup-btn').style.display = !vault.hasVault ? '' : 'none';
-            document.getElementById('vault-lock-btn').style.display = vault.hasVault && vault.isUnlocked ? '' : 'none';
-            document.getElementById('vault-change-btn').style.display = vault.hasVault && vault.isUnlocked ? '' : 'none';
-            document.getElementById('vault-reset-btn').style.display = vault.hasVault ? '' : 'none';
+            document.getElementById('vault-setup-btn').style.display = 'none';
+            document.getElementById('vault-lock-btn').style.display = 'none';
+            document.getElementById('vault-change-btn').style.display = 'none';
+
+            const unlockBtn = document.getElementById('vault-unlock-btn');
+            if (unlockBtn) unlockBtn.style.display = vault.needsLegacyUnlock ? '' : 'none';
         }
 
         function secretHint(set) {
@@ -759,8 +1005,8 @@
         }
 
         async function loadAll() {
-            const settings = await ipcRenderer.invoke('get-settings');
-            t = await ipcRenderer.invoke('get-translations', settings.language || 'system') || {};
+            const settings = await api.invoke('get-settings');
+            t = await api.invoke('get-translations', settings.language || 'system') || {};
             applyTranslations();
 
             profiles = (settings.profiles || []).slice();
@@ -818,13 +1064,11 @@
 
             updateVaultUi();
             const locked = vault.hasVault && !vault.isUnlocked;
+            const shell = document.getElementById('settings-shell');
+            shell.classList.toggle('locked', locked);
             document.getElementById('settings-body').style.display = locked ? 'none' : '';
             document.getElementById('settings-locked').style.display = locked ? '' : 'none';
             if (locked) {
-                document.querySelectorAll('#settings-body input').forEach((el) => {
-                    if (el.type === 'checkbox') el.checked = false;
-                    else if (el.type !== 'color') el.value = '';
-                });
                 return;
             }
 
@@ -833,7 +1077,7 @@
             const first = profiles.find(p => p.id === activeProfileId) || profiles[0];
             if (first) fillFormFromProfile(first);
             else {
-                const empty = await ipcRenderer.invoke('create-empty-profile', 'Default');
+                const empty = await api.invoke('create-empty-profile', 'Default');
                 profiles = [empty];
                 activeProfileId = empty.id;
                 fillFormFromProfile(empty);
@@ -895,22 +1139,17 @@
             };
 
             try {
-                const result = await ipcRenderer.invoke('save-settings', payload);
+                const result = await api.invoke('save-settings', payload);
                 if (!result || !result.ok) {
                     if (result && result.error === 'locked') {
                         alert(t.vault_errLocked || 'Unlock the vault first');
-                        ipcRenderer.invoke('show-vault-window', 'unlock');
+                        api.invoke('show-vault-window', 'unlock');
                         return;
                     }
                     alert(t.settings_errorSaving || 'Error saving settings');
                     return;
                 }
-                // If needs vault setup, unlock window is shown by main; keep settings open
-                if (!result.needsVaultSetup) {
-                    window.close();
-                } else {
-                    await loadAll();
-                }
+                window.close();
             } catch (e) {
                 console.error(e);
                 alert(t.settings_errorSaving || 'Error saving settings');
@@ -924,7 +1163,7 @@
             readFormIntoCurrentProfile();
             const name = prompt(t.settings_profileNamePrompt || 'Profile name', 'New profile');
             if (name == null) return;
-            const p = await ipcRenderer.invoke('create-empty-profile', name.trim() || 'New profile');
+            const p = await api.invoke('create-empty-profile', name.trim() || 'New profile');
             profiles.push(p);
             secretDrafts[p.id] = {};
             fillFormFromProfile(p);
@@ -933,7 +1172,7 @@
             readFormIntoCurrentProfile();
             const src = profiles.find(x => x.id === currentProfileId);
             if (!src) return;
-            const p = await ipcRenderer.invoke('create-empty-profile', (src.name || 'Profile') + ' copy');
+            const p = await api.invoke('create-empty-profile', (src.name || 'Profile') + ' copy');
             p.saveMethod = src.saveMethod;
             p.baseUrl = src.baseUrl;
             p.showInTray = src.showInTray;
@@ -964,28 +1203,34 @@
         document.getElementById('save-btn').onclick = () => saveAll();
         document.getElementById('cancel-btn').onclick = () => window.close();
 
-        document.getElementById('vault-unlock-btn').onclick = () => ipcRenderer.invoke('show-vault-window', 'unlock');
-        document.getElementById('vault-setup-btn').onclick = () => ipcRenderer.invoke('show-vault-window', 'setup');
-        document.getElementById('vault-change-btn').onclick = () => ipcRenderer.invoke('show-vault-window', 'change');
+        document.getElementById('vault-unlock-btn').onclick = () => api.invoke('show-vault-window', 'unlock');
+        document.getElementById('vault-setup-btn').onclick = () => api.invoke('show-vault-window', 'setup');
+        document.getElementById('vault-change-btn').onclick = () => api.invoke('show-vault-window', 'change');
         document.getElementById('vault-lock-btn').onclick = async () => {
-            await ipcRenderer.invoke('vault-lock');
+            await api.invoke('vault-lock');
             await loadAll();
         };
-        document.getElementById('vault-reset-btn').onclick = async () => {
+        async function resetVaultAction() {
             if (!confirm(t.vault_resetConfirm || 'Delete encrypted secrets? You will need to re-enter passwords.')) return;
-            await ipcRenderer.invoke('vault-reset');
+            await api.invoke('vault-reset');
+            const reveal = document.getElementById('danger-reveal');
+            if (reveal) reveal.checked = false;
+            const controls = document.getElementById('danger-controls');
+            if (controls) controls.classList.remove('visible');
             await loadAll();
-        };
+        }
+        document.getElementById('vault-reset-btn').onclick = () => resetVaultAction();
+        document.getElementById('vault-reset-locked-btn').onclick = () => resetVaultAction();
 
         document.getElementById('hotkey-reset-btn').onclick = async () => {
             stopRecording();
-            const result = await ipcRenderer.invoke('hotkeys-reset');
+            const result = await api.invoke('hotkeys-reset');
             if (result && result.current) hotkeyData.current = result.current;
             document.querySelectorAll('.hotkey-error').forEach((el) => { el.textContent = ''; });
             renderHotkeys();
         };
 
-        ipcRenderer.on('hotkeys-test-result', (_e, payload) => {
+        api.on('hotkeys-test-result', (payload) => {
             if (!payload || !payload.actionId) return;
             if (payload.ok) setRowError(payload.actionId, '');
             else setRowError(payload.actionId, t.hotkey_unavailable || 'Hotkey unavailable');
@@ -1006,7 +1251,7 @@
             const template = document.getElementById('export-template').value;
             const format = document.getElementById('export-format').value || 'png';
             try {
-                const name = await ipcRenderer.invoke('export-preview-filename', { template, format });
+                const name = await api.invoke('export-preview-filename', { template, format });
                 const label = t.settings_exportPreview || 'Example';
                 document.getElementById('export-preview').textContent = label + ': ' + (name || '');
             } catch (e) {
@@ -1023,7 +1268,7 @@
             document.getElementById('export-quality-value').textContent = e.target.value;
         });
 
-        ipcRenderer.on('vault-updated', () => loadAll());
+        api.on('vault-updated', () => loadAll());
         document.addEventListener('DOMContentLoaded', loadAll);
     </script>
 </body>

@@ -2,10 +2,11 @@
  * Auto-update via electron-updater (GitHub Releases).
  * No-ops safely in unpackaged / network-failure cases so capture keeps working.
  */
-import { app, ipcMain, Notification, BrowserWindow } from 'electron';
+import { app, ipcMain, BrowserWindow } from 'electron';
 import { autoUpdater, UpdateInfo, ProgressInfo } from 'electron-updater';
 import { getUpdatesSettings, loadAppSettings } from './settings-store';
 import { resolveLanguage, getTranslations } from './i18n';
+import { showAppNotification } from './app-notify';
 
 export type UpdaterStatus =
   | 'idle'
@@ -66,14 +67,7 @@ function broadcastStatus(): void {
 }
 
 function showNotify(title: string, body: string, onClick?: () => void): void {
-  if (!Notification.isSupported()) return;
-  try {
-    const n = new Notification({ title, body });
-    if (onClick) n.on('click', onClick);
-    n.show();
-  } catch (e) {
-    console.error('[updater] notification failed', e);
-  }
+  showAppNotification({ title, body, onClick });
 }
 
 function applyDownloadPreference(): void {

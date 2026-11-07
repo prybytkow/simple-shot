@@ -1,17 +1,15 @@
 /**
  * Upload arbitrary user files (drag-drop / file picker) via active upload profile.
  */
-import { app, clipboard, dialog, ipcMain, BrowserWindow, Notification, WebContents } from 'electron';
+import { app, clipboard, dialog, ipcMain, BrowserWindow, WebContents } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getRuntimeUploadSettings, loadAppSettings, getActiveProfile } from './settings-store';
 import { resolveLanguage, getTranslations } from './i18n';
-import { recordCaptureToHistory, HistoryMethod, HistoryFormat } from './history';
-import { S3Uploader } from './uploaders/s3-uploader';
-import { FTPUploader } from './uploaders/ftp-uploader';
-import { SSHUploader } from './uploaders/ssh-uploader';
-import { ApiUploader } from './uploaders/api-uploader';
-import { createNotifyIcon } from './app-icon';
+import { recordCaptureToHistory, HistoryFormat } from './history';
+import { uploadBySaveMethod } from './uploaders/dispatch';
+import { buildPublicUrl, historyMethodFromSaveMethod } from './upload-url';
+import { showAppNotification } from './app-notify';
 
 type FileUploadHooks = {
   ensureVaultUnlockedForUpload: () => boolean;
@@ -98,13 +96,6 @@ function uniqueNames(names: string[]): string[] {
   });
 }
 
-function historyMethod(saveMethod: string): HistoryMethod {
-  if (saveMethod === 's3') return 's3';
-  if (saveMethod === 'ftp') return 'ftp';
-  if (saveMethod === 'api') return 'api';
-  return 'ssh';
-}
-
 function historyFormat(fileName: string, mime: string): HistoryFormat | undefined {
   if (mime.startsWith('image/')) {
     const ext = path.extname(fileName).replace(/^\./, '').toLowerCase();
@@ -113,18 +104,6 @@ function historyFormat(fileName: string, mime: string): HistoryFormat | undefine
     if (ext === 'png') return 'png';
   }
   return undefined;
-}
-
-function buildPublicUrl(result: string, settings: any, fileName: string): string {
-  const baseUrl = (settings.baseUrl || '').trim().replace(/\/$/, '') || 'https://vault.by';
-  if (settings.saveMethod === 'api' && /^https?:\/\//i.test(result)) {
-    return result;
-  }
-  if (settings.saveMethod === 'ssh' || settings.saveMethod === 'ftp') {
-    return `${baseUrl}/${fileName}`;
-  }
-  const urlPath = result.startsWith('/') ? result : `/${result}`;
-  return `${baseUrl}${urlPath}`;
 }
 
 export async function uploadUserFile(
@@ -140,23 +119,13 @@ export async function uploadUserFile(
   const mime = guessMime(fileName);
   const buffer = fs.readFileSync(filePath);
 
-  let result: string;
-  switch (settings.saveMethod) {
-    case 's3':
-      result = await new S3Uploader().uploadFile(buffer, fileName, settings, mime);
-      break;
-    case 'ftp':
-      result = await new FTPUploader().uploadFile(buffer, fileName, settings);
-      break;
-    case 'ssh':
-      result = await new SSHUploader().uploadFile(buffer, fileName, settings);
-      break;
-    case 'api':
-      result = await new ApiUploader().uploadFile(buffer, fileName, settings, mime);
-      break;
-    default:
-      throw new Error(`Unknown save method: ${settings.saveMethod}`);
-  }
+  const result = await uploadBySaveMethod(
+    settings.saveMethod,
+    buffer,
+    fileName,
+    settings,
+    mime
+  );
 
   const url = buildPublicUrl(result, settings, fileName);
   const isImage = mime.startsWith('image/');
@@ -164,7 +133,7 @@ export async function uploadUserFile(
   try {
     await recordCaptureToHistory({
       buffer: isImage ? buffer : Buffer.alloc(0),
-      method: historyMethod(settings.saveMethod),
+      method: historyMethodFromSaveMethod(settings.saveMethod),
       urlOrPath: url,
       fileName,
       format: historyFormat(fileName, mime),
@@ -187,17 +156,7 @@ function sendProgress(sender: WebContents | null, payload: UploadProgressPayload
 }
 
 function notifyDone(title: string, body: string): void {
-  if (!Notification.isSupported()) return;
-  try {
-    const icon = createNotifyIcon();
-    new Notification({
-      title,
-      body,
-      icon: icon && !icon.isEmpty() ? icon : undefined
-    }).show();
-  } catch {
-    /* ignore */
-  }
+  showAppNotification({ title, body, openUrl: /^https?:\/\//i.test(body) ? body : undefined });
 }
 
 export async function startUploadQueue(
@@ -341,5 +300,31 @@ export function registerFileUploadIpc(h: FileUploadHooks & { getUploadWindow: ()
   ipcMain.handle('upload-files', async (event, payload: { paths?: string[] }) => {
     const paths = Array.isArray(payload?.paths) ? payload.paths.filter((p) => typeof p === 'string') : [];
     return startUploadQueue(paths.slice(0, MAX_FILES), event.sender);
+  });
+
+  /** File size / directory check for upload UI (renderer has no fs). */
+  ipcMain.handle('stat-upload-paths', (_e, payload: { paths?: string[] }) => {
+    const paths = Array.isArray(payload?.paths) ? payload.paths.filter((p) => typeof p === 'string') : [];
+    return paths.slice(0, MAX_FILES).map((filePath) => {
+      try {
+        const st = fs.statSync(filePath);
+        return {
+          path: filePath,
+          name: path.basename(filePath),
+          size: st.size,
+          isDirectory: st.isDirectory(),
+          warnSize: st.size > 100 * 1024 * 1024
+        };
+      } catch {
+        return {
+          path: filePath,
+          name: path.basename(filePath),
+          size: 0,
+          isDirectory: false,
+          warnSize: false,
+          missing: true
+        };
+      }
+    });
   });
 }

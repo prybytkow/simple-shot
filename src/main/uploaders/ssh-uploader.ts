@@ -6,11 +6,10 @@ interface SSH2SFTPClient {
     end(): Promise<void>;
 }
 
-// Используем require вместо import для модуля без типов
-const Client = require('ssh2-sftp-client');
-
 export class SSHUploader {
     async uploadFile(fileBuffer: Buffer, fileName: string, settings: any): Promise<string> {
+        // Lazy require: ssh2 stays unloaded until an SSH upload runs
+        const Client = require('ssh2-sftp-client');
         const sftp: SSH2SFTPClient = new Client();
         
         try {

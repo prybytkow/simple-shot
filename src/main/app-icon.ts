@@ -18,6 +18,14 @@ export function appIconPath(): string {
   return path.join(dir, 'icon.png');
 }
 
+/** NativeImage for BrowserWindow `icon` (title bar). Prefer this over a bare path. */
+export function appWindowIcon(): NativeImage | undefined {
+  const p = appIconPath();
+  if (!fs.existsSync(p)) return undefined;
+  const img = nativeImage.createFromPath(p);
+  return img.isEmpty() ? undefined : img;
+}
+
 /** Tray image: macOS template when available, otherwise app icon. */
 export function createTrayIcon(): NativeImage {
   const dir = assetsDir();
@@ -35,6 +43,17 @@ export function createTrayIcon(): NativeImage {
 
 /** Optional NativeImage for Notification ({ icon }). */
 export function createNotifyIcon(): NativeImage | undefined {
-  const p = appIconPath();
+  const p = notificationIconPath() || appIconPath();
   return fs.existsSync(p) ? nativeImage.createFromPath(p) : undefined;
+}
+
+/**
+ * Prefer PNG for toast content (Windows Action Center handles it more reliably than .ico).
+ * Falls back to platform app icon path.
+ */
+export function notificationIconPath(): string | undefined {
+  const png = path.join(assetsDir(), 'icon.png');
+  if (fs.existsSync(png)) return png;
+  const p = appIconPath();
+  return fs.existsSync(p) ? p : undefined;
 }

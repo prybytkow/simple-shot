@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Upload</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body {
+            height: 100%;
+            overflow: hidden;
+            font-family: Segoe UI, Arial, sans-serif;
+            background: #1c1e22;
+            color: #f2f2f2;
+            user-select: none;
+        }
+        .card {
+            height: 100%;
+            padding: 22px 20px 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            -webkit-app-region: drag;
+        }
+        .spinner {
+            display: none;
+            width: 36px;
+            height: 36px;
+            margin-bottom: 14px;
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #5dade2;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .icon {
+            display: none;
+            width: 40px;
+            height: 40px;
+            margin-bottom: 12px;
+            border-radius: 50%;
+            line-height: 40px;
+            font-size: 22px;
+            font-weight: bold;
+        }
+        .icon.success { background: #27ae60; color: #fff; }
+        .icon.error { background: #c0392b; color: #fff; }
+        .title {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .url {
+            display: none;
+            width: 100%;
+            font-size: 12px;
+            color: #a8c5d8;
+            word-break: break-all;
+            line-height: 1.4;
+            margin: 6px 0 4px;
+            padding: 8px 10px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.06);
+            cursor: pointer;
+            -webkit-app-region: no-drag;
+            text-align: left;
+        }
+        .url:hover { background: rgba(255, 255, 255, 0.1); color: #d6eaf8; }
+        .hint {
+            display: none;
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+        .error {
+            display: none;
+            font-size: 12px;
+            color: #f5b7b1;
+            margin: 6px 0 10px;
+            max-height: 72px;
+            overflow: auto;
+            width: 100%;
+            word-break: break-word;
+            -webkit-app-region: no-drag;
+        }
+        .actions {
+            display: none;
+            gap: 8px;
+            margin-top: 10px;
+            -webkit-app-region: no-drag;
+        }
+        .actions.visible { display: flex; }
+        button {
+            padding: 7px 12px;
+            font-size: 12px;
+            border: none;
+            border-radius: 6px;
+            background: #3498db;
+            color: #fff;
+            cursor: pointer;
+        }
+        button.secondary { background: #5d6d7e; }
+        button:hover { filter: brightness(1.08); }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="spinner" id="spinner"></div>
+        <div class="icon" id="icon"></div>
+        <div class="title" id="title">Uploading…</div>
+        <div class="url" id="url" title=""></div>
+        <div class="hint" id="hint"></div>
+        <div class="error" id="error"></div>
+        <div class="actions" id="actions">
+            <button type="button" id="copy-btn">Copy</button>
+            <button type="button" id="open-btn">Open</button>
+            <button type="button" class="secondary" id="close-btn">Close</button>
+        </div>
+    </div>
+    <script>
+        const api = window.simpleShot;
+        const urlParams = new URLSearchParams(window.location.search);
+        const lang = urlParams.get('lang') || 'en';
+
+        let t = {};
+        let lastUrl = '';
+        let autoCloseTimer = null;
+
+        const spinner = document.getElementById('spinner');
+        const icon = document.getElementById('icon');
+        const title = document.getElementById('title');
+        const urlEl = document.getElementById('url');
+        const hint = document.getElementById('hint');
+        const errEl = document.getElementById('error');
+        const actions = document.getElementById('actions');
+        const copyBtn = document.getElementById('copy-btn');
+        const openBtn = document.getElementById('open-btn');
+        const closeBtn = document.getElementById('close-btn');
+
+        function shortenUrl(url, maxLen) {
+            const str = String(url || '');
+            const limit = maxLen || 56;
+            if (str.length <= limit) return str;
+            const keep = Math.floor((limit - 1) / 2);
+            return str.slice(0, keep) + '…' + str.slice(-keep);
+        }
+
+        function clearAutoClose() {
+            if (autoCloseTimer) {
+                clearTimeout(autoCloseTimer);
+                autoCloseTimer = null;
+            }
+        }
+
+        function applyState(payload) {
+            const state = (payload && payload.state) || 'uploading';
+            clearAutoClose();
+            lastUrl = (payload && payload.url) || '';
+
+            spinner.style.display = state === 'uploading' ? 'block' : 'none';
+            icon.style.display = state === 'success' || state === 'error' ? 'block' : 'none';
+            icon.className = 'icon' + (state === 'success' ? ' success' : state === 'error' ? ' error' : '');
+            icon.textContent = state === 'success' ? '✓' : state === 'error' ? '!' : '';
+
+            if (state === 'uploading') {
+                title.textContent = t.capture_uploading || 'Uploading…';
+                urlEl.style.display = 'none';
+                hint.style.display = 'none';
+                errEl.style.display = 'none';
+                actions.classList.remove('visible');
+                openBtn.style.display = '';
+                copyBtn.style.display = '';
+                return;
+            }
+
+            if (state === 'success') {
+                title.textContent = t.capture_linkCopied || 'Link copied';
+                if (lastUrl) {
+                    urlEl.style.display = 'block';
+                    urlEl.textContent = shortenUrl(lastUrl);
+                    urlEl.title = lastUrl;
+                    hint.style.display = 'block';
+                    hint.textContent = t.capture_clickToCopy || 'Click to copy again';
+                } else {
+                    urlEl.style.display = 'none';
+                    hint.style.display = 'none';
+                }
+                errEl.style.display = 'none';
+                actions.classList.add('visible');
+                copyBtn.style.display = lastUrl ? '' : 'none';
+                openBtn.style.display = lastUrl ? '' : 'none';
+                const ms = typeof payload.autoCloseMs === 'number' ? payload.autoCloseMs : 0;
+                if (ms > 0) {
+                    autoCloseTimer = setTimeout(() => {
+                        api.send('upload-feedback-close');
+                    }, ms);
+                }
+                return;
+            }
+
+            title.textContent = t.capture_uploadFailed || 'Upload failed';
+            urlEl.style.display = 'none';
+            hint.style.display = 'none';
+            errEl.style.display = 'block';
+            errEl.textContent = (payload && payload.error) || '';
+            actions.classList.add('visible');
+            copyBtn.style.display = 'none';
+            openBtn.style.display = 'none';
+        }
+
+        function copyUrl() {
+            if (!lastUrl) return;
+            const done = () => {
+                hint.style.display = 'block';
+                hint.textContent = t.capture_copiedAgain || 'Copied';
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(lastUrl).then(done).catch(() => {
+                    api.send('copy-text', lastUrl);
+                    done();
+                });
+            } else {
+                api.send('copy-text', lastUrl);
+                done();
+            }
+        }
+
+        copyBtn.onclick = () => copyUrl();
+        urlEl.onclick = () => copyUrl();
+        openBtn.onclick = () => {
+            if (lastUrl) api.send('upload-feedback-open', lastUrl);
+        };
+        closeBtn.onclick = () => api.send('upload-feedback-close');
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') api.send('upload-feedback-close');
+        });
+
+        api.on('upload-feedback-state', (payload) => applyState(payload || {}));
+
+        (async () => {
+            t = await api.invoke('get-translations', lang) || {};
+            copyBtn.textContent = t.feedback_copy || 'Copy';
+            openBtn.textContent = t.feedback_open || 'Open';
+            closeBtn.textContent = t.capture_close || 'Close';
+            const initial = urlParams.get('state') || 'uploading';
+            applyState({ state: initial });
+        })();
+    </script>
+</body>
+</html>

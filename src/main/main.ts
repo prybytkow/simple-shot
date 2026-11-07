@@ -1,33 +1,13 @@
-import { app, BrowserWindow, Tray, Menu, ipcMain, MenuItemConstructorOptions, shell } from 'electron';
+import { app, BrowserWindow, Tray, Menu, ipcMain, MenuItemConstructorOptions } from 'electron';
 import * as path from 'path';
 import { setupScreenCapture, isCaptureSessionOpen, openHistoryReedit } from './screen-capture';
-import { setupSSHHandler } from './ssh-handler';
-import {
-  getHistoryForUi,
-  deleteHistoryEntry,
-  resolveReeditPath,
-  resolveRevealPath,
-  getHistoryEntry
-} from './history';
 import { resolveLanguage, getTranslations } from './i18n';
 import {
   loadAppSettings,
-  loadSettingsCompat,
-  getSettingsForUi,
   getCaptureSettings,
-  saveFromUi,
   setActiveProfile,
   getActiveProfile,
-  unlockVault,
-  lockVault,
-  setupVault,
-  changeVaultPassword,
-  resetVault,
-  isVaultLockedBlocking,
-  hasVault,
-  isVaultUnlocked,
-  createEmptyProfile,
-  UploadProfile
+  needsLegacyVaultUnlock
 } from './settings-store';
 import {
   setHotkeyHandlers,
@@ -43,16 +23,26 @@ import {
   checkForUpdates,
   downloadUpdate,
   installUpdate,
-  getUpdaterState,
-  refreshUpdaterSettings
+  getUpdaterState
 } from './updater';
-import { appIconPath, createTrayIcon } from './app-icon';
-import { previewFileName } from './export-encode';
+import { createTrayIcon } from './app-icon';
 import { registerFileUploadIpc } from './file-upload';
+import { setVaultUnlockUiHandler, ensureVaultUnlockedForUpload } from './vault-flow';
+import { utilityWindowOptions } from './window-defaults';
+import { registerSettingsIpc } from './ipc/settings-ipc';
+import { registerVaultIpc } from './ipc/vault-ipc';
+import { registerHistoryIpc } from './ipc/history-ipc';
 
 process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true';
 
 app.commandLine.appendSwitch('force-color-profile', 'srgb');
+
+// Windows toast identity: must be set before ready. Matches electron-builder appId.
+// Packaged installs show "Simple Shot"; `electron .` may still say Electron (host exe).
+app.setName('Simple Shot');
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.simple-shot.app');
+}
 
 process.on('uncaughtException', (err) => {
   console.error('[uncaughtException]', err);
@@ -62,29 +52,15 @@ process.on('unhandledRejection', (reason) => {
 });
 
 let tray: Tray;
-let mainWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
 let historyWindow: BrowserWindow | null = null;
 let uploadWindow: BrowserWindow | null = null;
 let unlockWindow: BrowserWindow | null = null;
 let isQuitting = false;
 
-/** @deprecated use settings-store; kept for screen-capture / watermark language */
-export function loadSettings() {
-  return loadSettingsCompat();
-}
-
-export function getMainWindow(): BrowserWindow | null {
-  return mainWindow;
-}
-
 function getResolvedLang(): string {
   const settings = loadAppSettings();
   return resolveLanguage(settings.language || 'system', app.getLocale());
-}
-
-function iconFile(): string {
-  return appIconPath();
 }
 
 export function buildTrayMenu(): void {
@@ -202,22 +178,14 @@ export function buildTrayMenu(): void {
     });
   }
 
-  if (hasVault()) {
-    template.push({ type: 'separator' });
-    if (isVaultUnlocked()) {
-      template.push({
-        label: t.tray_lockVault || 'Lock vault',
-        click: () => {
-          lockVault();
-          buildTrayMenu();
-        }
-      });
-    } else {
-      template.push({
+  if (needsLegacyVaultUnlock()) {
+    template.push(
+      { type: 'separator' },
+      {
         label: t.tray_unlockVault || 'Unlock vault…',
         click: () => showUnlockWindow('unlock')
-      });
-    }
+      }
+    );
   }
 
   template.push(
@@ -247,19 +215,18 @@ function createSettingsWindow(): void {
     return;
   }
   const t = getTranslations(getResolvedLang() as any);
-  settingsWindow = new BrowserWindow({
-    width: 640,
-    height: 820,
-    title: t.settings_title,
-    icon: iconFile(),
-    resizable: true,
-    minimizable: false,
-    maximizable: false,
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
-    }
-  });
+  settingsWindow = new BrowserWindow(
+    utilityWindowOptions({
+      width: 880,
+      height: 640,
+      minWidth: 720,
+      minHeight: 520,
+      title: t.settings_title,
+      resizable: true,
+      minimizable: false,
+      maximizable: false
+    })
+  );
 
   settingsWindow.loadFile(path.join(__dirname, '../renderer/settings.html'));
   settingsWindow.on('closed', () => {
@@ -274,16 +241,13 @@ function createHistoryWindow(): void {
   }
   const lang = getResolvedLang();
   const t = getTranslations(lang as any);
-  historyWindow = new BrowserWindow({
-    width: 720,
-    height: 520,
-    title: t.history_title,
-    icon: iconFile(),
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
-    }
-  });
+  historyWindow = new BrowserWindow(
+    utilityWindowOptions({
+      width: 720,
+      height: 520,
+      title: t.history_title
+    })
+  );
   historyWindow.loadFile(path.join(__dirname, '../renderer/history.html'), { query: { lang } });
   historyWindow.on('closed', () => {
     historyWindow = null;
@@ -297,19 +261,16 @@ function createUploadWindow(): void {
   }
   const lang = getResolvedLang();
   const t = getTranslations(lang as any);
-  uploadWindow = new BrowserWindow({
-    width: 520,
-    height: 480,
-    title: t.upload_title || 'Upload files',
-    icon: iconFile(),
-    resizable: true,
-    minimizable: true,
-    maximizable: false,
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
-    }
-  });
+  uploadWindow = new BrowserWindow(
+    utilityWindowOptions({
+      width: 520,
+      height: 480,
+      title: t.upload_title || 'Upload files',
+      resizable: true,
+      minimizable: true,
+      maximizable: false
+    })
+  );
   uploadWindow.loadFile(path.join(__dirname, '../renderer/upload.html'), { query: { lang } });
   uploadWindow.on('closed', () => {
     uploadWindow = null;
@@ -329,21 +290,18 @@ export function showUnlockWindow(mode: UnlockMode = 'unlock'): void {
     setup: t.vault_setupTitle || 'Set master password',
     change: t.vault_changeTitle || 'Change master password'
   };
-  unlockWindow = new BrowserWindow({
-    width: 420,
-    height: mode === 'change' ? 360 : 300,
-    title: titles[mode],
-    icon: iconFile(),
-    resizable: false,
-    minimizable: false,
-    maximizable: false,
-    parent: settingsWindow && !settingsWindow.isDestroyed() ? settingsWindow : undefined,
-    modal: !!(settingsWindow && !settingsWindow.isDestroyed()),
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
-    }
-  });
+  unlockWindow = new BrowserWindow(
+    utilityWindowOptions({
+      width: 420,
+      height: mode === 'change' ? 360 : 300,
+      title: titles[mode],
+      resizable: false,
+      minimizable: false,
+      maximizable: false,
+      parent: settingsWindow && !settingsWindow.isDestroyed() ? settingsWindow : undefined,
+      modal: !!(settingsWindow && !settingsWindow.isDestroyed())
+    })
+  );
   unlockWindow.loadFile(path.join(__dirname, '../renderer/unlock.html'), {
     query: { mode, lang: getResolvedLang() }
   });
@@ -353,30 +311,9 @@ export function showUnlockWindow(mode: UnlockMode = 'unlock'): void {
 }
 
 app.whenReady().then(() => {
-  if (process.platform === 'win32') {
-    app.setAppUserModelId('com.simple-shot.app');
-  }
-
   loadAppSettings();
 
-  mainWindow = new BrowserWindow({
-    show: false,
-    width: 100,
-    height: 100,
-    skipTaskbar: true,
-    webPreferences: { nodeIntegration: true, contextIsolation: false }
-  });
-  mainWindow.loadURL('about:blank');
-  mainWindow.on('close', (e) => {
-    if (!isQuitting) {
-      e.preventDefault();
-      mainWindow?.hide();
-    }
-  });
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
-
+  // Tray-only: no hidden BrowserWindow — stays alive via Tray + window-all-closed handler
   tray = new Tray(createTrayIcon());
   buildTrayMenu();
 
@@ -389,13 +326,11 @@ app.whenReady().then(() => {
     });
   });
 
-  setupSSHHandler();
+  setVaultUnlockUiHandler(() => showUnlockWindow('unlock'));
   registerFileUploadIpc({
-    ensureVaultUnlockedForUpload: () => ensureVaultUnlockedForUpload(),
+    ensureVaultUnlockedForUpload,
     getUploadWindowParent: () =>
-      uploadWindow && !uploadWindow.isDestroyed()
-        ? uploadWindow
-        : getMainWindow(),
+      uploadWindow && !uploadWindow.isDestroyed() ? uploadWindow : null,
     getUploadWindow: () => uploadWindow
   });
 
@@ -428,204 +363,18 @@ app.whenReady().then(() => {
     getLang: () => getResolvedLang()
   });
 
-  // Migrated plaintext secrets in memory — force vault setup so they are not lost on quit
-  const ui = getSettingsForUi();
-  if (ui.vault.needsSetup) {
-    showUnlockWindow('setup');
-  } else if (ui.vault.hasVault && !ui.vault.isUnlocked) {
-    showUnlockWindow('unlock');
-  }
-});
-
-ipcMain.handle('get-settings', () => getSettingsForUi());
-
-ipcMain.handle('get-translations', (_event, lang: string) => {
-  return getTranslations(resolveLanguage(lang || 'system', app.getLocale()) as any);
-});
-
-ipcMain.handle('save-settings', (_event, payload: {
-  language?: string;
-  afterUploadFeedback?: 'overlay' | 'notification' | 'window';
-  watermark?: any;
-  capture?: { defaultMode?: 'region' | 'fullscreen' | 'window'; delaySeconds?: number };
-  updates?: { autoCheck?: boolean; autoDownload?: boolean };
-  export?: {
-    fileNameTemplate?: string;
-    format?: 'png' | 'jpg' | 'webp';
-    jpegQuality?: number;
-    webpQuality?: number;
-    defaultDestination?: 'upload' | 'file' | 'clipboard';
-  };
-  activeProfileId?: string;
-  profiles: UploadProfile[];
-  secretsByProfile?: Record<string, any>;
-}) => {
-  const result = saveFromUi({
-    ...payload,
-    capture: payload.capture
-      ? {
-          defaultMode:
-            payload.capture.defaultMode === 'fullscreen' || payload.capture.defaultMode === 'window'
-              ? payload.capture.defaultMode
-              : 'region',
-          delaySeconds:
-            typeof payload.capture.delaySeconds === 'number' ? payload.capture.delaySeconds : 3
-        }
-      : undefined,
-    updates: payload.updates
-      ? {
-          autoCheck: payload.updates.autoCheck !== false,
-          autoDownload: payload.updates.autoDownload !== false
-        }
-      : undefined,
-    export: payload.export
-      ? {
-          fileNameTemplate:
-            typeof payload.export.fileNameTemplate === 'string' && payload.export.fileNameTemplate.trim()
-              ? payload.export.fileNameTemplate.trim()
-              : 'screenshot-{yyyy}-{MM}-{dd}_{HH}-{mm}-{ss}',
-          format:
-            payload.export.format === 'jpg' || payload.export.format === 'webp'
-              ? payload.export.format
-              : 'png',
-          jpegQuality:
-            typeof payload.export.jpegQuality === 'number' ? payload.export.jpegQuality : 92,
-          webpQuality:
-            typeof payload.export.webpQuality === 'number' ? payload.export.webpQuality : 90,
-          defaultDestination:
-            payload.export.defaultDestination === 'file' ||
-            payload.export.defaultDestination === 'clipboard'
-              ? payload.export.defaultDestination
-              : 'upload'
-        }
-      : undefined
+  registerSettingsIpc({ buildTrayMenu });
+  registerVaultIpc({
+    buildTrayMenu,
+    showUnlockWindow,
+    getSettingsWindow: () => settingsWindow,
+    getUnlockWindow: () => unlockWindow
   });
-  refreshUpdaterSettings();
-  buildTrayMenu();
-  if (result.needsVaultSetup) {
-    showUnlockWindow('setup');
-  }
-  return result;
-});
+  registerHistoryIpc({ openHistoryReedit });
 
-ipcMain.handle('export-preview-filename', (_e, payload: { template?: string; format?: string }) => {
-  const format =
-    payload?.format === 'jpg' || payload?.format === 'webp' ? payload.format : 'png';
-  const template =
-    typeof payload?.template === 'string' && payload.template.trim()
-      ? payload.template.trim()
-      : 'screenshot-{yyyy}-{MM}-{dd}_{HH}-{mm}-{ss}';
-  return previewFileName(template, format);
-});
-
-ipcMain.handle('create-empty-profile', (_e, name?: string) => {
-  return createEmptyProfile(name || 'New profile');
-});
-
-ipcMain.handle('set-active-profile', (_e, id: string) => {
-  const ok = setActiveProfile(id);
-  buildTrayMenu();
-  return { success: ok };
-});
-
-ipcMain.handle('vault-status', () => {
-  const ui = getSettingsForUi();
-  return ui.vault;
-});
-
-ipcMain.handle('vault-unlock', (_e, password: string) => {
-  const result = unlockVault(password || '');
-  buildTrayMenu();
-  if (result.ok) {
-    registerAllHotkeys();
-  }
-  if (result.ok && settingsWindow && !settingsWindow.isDestroyed()) {
-    settingsWindow.webContents.send('vault-updated');
-  }
-  return result;
-});
-
-ipcMain.handle('vault-setup', (_e, password: string) => {
-  const result = setupVault(password || '');
-  buildTrayMenu();
-  if (result.ok && settingsWindow && !settingsWindow.isDestroyed()) {
-    settingsWindow.webContents.send('vault-updated');
-  }
-  return result;
-});
-
-ipcMain.handle('vault-change-password', (_e, oldPassword: string, newPassword: string) => {
-  const result = changeVaultPassword(oldPassword || '', newPassword || '');
-  buildTrayMenu();
-  return result;
-});
-
-ipcMain.handle('vault-lock', () => {
-  lockVault();
-  buildTrayMenu();
-  if (settingsWindow && !settingsWindow.isDestroyed()) {
-    settingsWindow.webContents.send('vault-updated');
-  }
-  return { ok: true };
-});
-
-ipcMain.handle('vault-reset', () => {
-  resetVault();
-  buildTrayMenu();
-  registerAllHotkeys();
-  if (settingsWindow && !settingsWindow.isDestroyed()) {
-    settingsWindow.webContents.send('vault-updated');
-  }
-  return { ok: true };
-});
-
-ipcMain.handle('show-vault-window', (_e, mode: UnlockMode) => {
-  showUnlockWindow(mode || 'unlock');
-  return { ok: true };
-});
-
-ipcMain.handle('close-unlock-window', () => {
-  if (unlockWindow && !unlockWindow.isDestroyed()) unlockWindow.close();
-  return { ok: true };
-});
-
-ipcMain.handle('get-history', () => getHistoryForUi());
-
-ipcMain.handle('history-delete', (_e, id: string) => {
-  if (!id || typeof id !== 'string') return { ok: false };
-  return deleteHistoryEntry(id);
-});
-
-ipcMain.handle('history-reedit', (_e, id: string) => {
-  if (!id || typeof id !== 'string') return { ok: false, error: 'unavailable' };
-  const filePath = resolveReeditPath(id);
-  if (!filePath) return { ok: false, error: 'unavailable' };
-  return openHistoryReedit(filePath);
-});
-
-ipcMain.handle('history-reveal', (_e, id: string) => {
-  if (!id || typeof id !== 'string') return { ok: false };
-  const filePath = resolveRevealPath(id);
-  if (!filePath) return { ok: false };
-  shell.showItemInFolder(filePath);
-  return { ok: true };
-});
-
-ipcMain.handle('history-open', async (_e, id: string) => {
-  if (!id || typeof id !== 'string') return { ok: false };
-  const entry = getHistoryEntry(id);
-  if (!entry) return { ok: false };
-  const target = entry.urlOrPath || resolveRevealPath(id);
-  if (!target) return { ok: false };
-  try {
-    if (/^https?:\/\//i.test(target)) {
-      await shell.openExternal(target);
-    } else {
-      await shell.openPath(target);
-    }
-    return { ok: true };
-  } catch {
-    return { ok: false };
+  // Legacy master-password vault (no installTimestamp) — one-time unlock to migrate
+  if (needsLegacyVaultUnlock()) {
+    showUnlockWindow('unlock');
   }
 });
 
@@ -639,12 +388,6 @@ ipcMain.handle('hotkeys-set', (_e, payload: { actionId: string; accelerator: str
 });
 
 ipcMain.handle('hotkeys-reset', () => resetHotkeysToDefaults());
-
-export function ensureVaultUnlockedForUpload(): boolean {
-  if (!isVaultLockedBlocking()) return true;
-  showUnlockWindow('unlock');
-  return false;
-}
 
 app.on('window-all-closed', () => {
   if (!isQuitting) return;

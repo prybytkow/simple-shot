@@ -87,7 +87,7 @@ capture?: {
 | Файл | Изменение |
 |------|-----------|
 | `screen-capture.ts` | `setupScreenCapture(options?: { mode, delaySeconds })`; ветки fullscreen/window; countdown helper |
-| `main.ts` / `tray.ts` | Подменю Capture |
+| `main.ts` (tray menu) | Подменю Capture |
 | `capture-window.html` | Поддержка «фиксированного» кадра (fullscreen/window) без обязательного drag |
 | `settings-store.ts` | Поля `capture.*` |
 | Новый `window-picker.html` (опц.) | Список окон с thumbnails |

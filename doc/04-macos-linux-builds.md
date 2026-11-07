@@ -7,7 +7,7 @@
 ## Текущее состояние
 
 - Скрипты: `dist` / `dist:win` (Win), `dist:mac`, `dist:linux`.
-- `build.mac`: universal `dmg` + `zip`, `icon.icns`, hardenedRuntime, entitlements, `extendInfo` (Screen Recording / Accessibility strings).
+- `build.mac`: separate `arm64` + `x64` `dmg` + `zip`, `icon.icns`, hardenedRuntime, entitlements, `extendInfo` (Screen Recording / Accessibility strings).
 - `build.linux`: AppImage + deb, иконки `build/icons/`.
 - Иконки: `npm run icons` → `assets/icon.icns`, `assets/iconTemplate.png`, `build/icons/{size}x{size}.png`.
 - CI: `.github/workflows/release.yml` на теги `v*` (windows / macos / linux); mac с `CSC_IDENTITY_AUTO_DISCOVERY=false`.
@@ -20,13 +20,13 @@
 | Платформа | Формат (MVP) | Дополнительно (nice-to-have) |
 |-----------|--------------|------------------------------|
 | Windows | NSIS `.exe` x64 | portable (`win-unpacked`) |
-| macOS | universal `.dmg` | zip для updater |
+| macOS | `.dmg` arm64 + x64 | zip для updater |
 | Linux | AppImage x64 | `.deb` (включён) |
 
 Архитектуры:
 
 - Windows: `x64`.
-- macOS: `universal`.
+- macOS: `arm64`, `x64` (отдельные артефакты, не universal).
 - Linux: `x64`.
 
 ## Конфиг electron-builder
@@ -73,7 +73,7 @@ README: секции Windows / macOS / Linux, таблица артефакто�
 
 ## Acceptance criteria
 
-- [x] `dist:mac` на macOS даёт `.dmg` (+ zip для updater), universal.
+- [x] `dist:mac` на macOS даёт `.dmg` + zip для updater (arm64 и x64).
 - [x] `dist:linux` на Linux даёт AppImage и deb.
 - [x] GitHub Release workflow публикует Win + Mac + Linux (или unsigned mac при отсутствии secrets).
 - [ ] Приложение запускается на чистой VM каждой ОС: tray → capture region → save (ручной smoke после релиза).

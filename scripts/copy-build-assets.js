@@ -33,11 +33,14 @@ if (fs.existsSync(rendererSrc)) {
   mkdirRecursive(rendererDest);
   for (const name of fs.readdirSync(rendererSrc)) {
     const src = path.join(rendererSrc, name);
-    if (fs.statSync(src).isFile()) {
-      fs.copyFileSync(src, path.join(rendererDest, name));
+    const dest = path.join(rendererDest, name);
+    if (fs.statSync(src).isDirectory()) {
+      copyRecursive(src, dest);
+    } else if (fs.statSync(src).isFile()) {
+      fs.copyFileSync(src, dest);
     }
   }
-  console.log('Copied renderer/* to dist/renderer/');
+  console.log('Copied renderer/ (recursive) to dist/renderer/');
 }
 
 // assets/* -> dist/main/assets/

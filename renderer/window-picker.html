@@ -88,7 +88,7 @@
     <button type="button" class="btn" id="cancel-btn" data-i18n="capture_cancel">Cancel</button>
   </div>
   <script>
-    const { ipcRenderer } = require('electron');
+    const api = window.simpleShot;
     let t = {};
 
     function applyI18n() {
@@ -103,7 +103,7 @@
       const params = new URLSearchParams(location.search);
       const lang = params.get('lang') || 'system';
       try {
-        t = (await ipcRenderer.invoke('get-translations', lang)) || {};
+        t = (await api.invoke('get-translations', lang)) || {};
       } catch (_) {
         t = {};
       }
@@ -127,20 +127,20 @@
         btn.innerHTML = `<img alt=""><div class="name"></div>`;
         btn.querySelector('img').src = s.thumbnailDataUrl || '';
         btn.querySelector('.name').textContent = s.name || s.id;
-        btn.onclick = () => ipcRenderer.send('window-picked', s.id);
+        btn.onclick = () => api.send('window-picked', s.id);
         grid.appendChild(btn);
       });
     }
 
     document.getElementById('cancel-btn').onclick = () => {
-      ipcRenderer.send('window-picker-cancel');
+      api.send('window-picker-cancel');
     };
 
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') ipcRenderer.send('window-picker-cancel');
+      if (e.key === 'Escape') api.send('window-picker-cancel');
     });
 
-    ipcRenderer.on('window-sources', (_e, sources) => render(sources));
+    api.on('window-sources', (sources) => render(sources));
     loadTranslations();
   </script>
 </body>

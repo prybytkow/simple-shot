@@ -2,7 +2,7 @@
  * Global hotkeys via Electron globalShortcut.
  * Handlers are injected from main.ts to avoid circular imports.
  */
-import { globalShortcut, Notification, BrowserWindow, app } from 'electron';
+import { globalShortcut, BrowserWindow, app } from 'electron';
 import {
   defaultHotkeys,
   getHotkeys,
@@ -12,7 +12,7 @@ import {
   loadAppSettings
 } from './settings-store';
 import { resolveLanguage, getTranslations } from './i18n';
-import { appIconPath } from './app-icon';
+import { showAppNotification } from './app-notify';
 
 export type HotkeyActionId =
   | 'capture.region'
@@ -56,17 +56,14 @@ function getLang(): string {
 }
 
 function notifyUnavailable(actionId: string): void {
-  if (!Notification.isSupported()) return;
   const t = getTranslations(getLang() as any);
-  const n = new Notification({
+  showAppNotification({
     title: t.notify_hotkeyUnavailableTitle || 'Hotkey unavailable',
     body: (t.notify_hotkeyUnavailableBody || 'Could not register hotkey for {action}').replace(
       '{action}',
       actionId
-    ),
-    icon: appIconPath()
+    )
   });
-  n.show();
 }
 
 function emitTestResult(payload: { actionId: string; ok: boolean; error?: string }): void {
