@@ -1,6 +1,6 @@
 {
   "name": "simple-shot",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "main": "dist/main/main.js",
   "scripts": {
     "icons": "node scripts/generate-icons.js",
