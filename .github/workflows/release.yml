@@ -18,11 +18,17 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      # Empty secrets become "" and break electron-builder (treats CSC_LINK as a path).
       - name: Build and publish Windows
-        run: npx electron-builder --win --publish always
+        shell: bash
+        run: |
+          if [ -z "${CSC_LINK:-}" ]; then
+            unset CSC_LINK CSC_KEY_PASSWORD
+            echo "WIN_CSC_* not set — building unsigned"
+          fi
+          npx electron-builder --win --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Optional Authenticode — omit for unsigned local-style CI builds
           CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
 
@@ -36,13 +42,23 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      # Empty secrets become "" and break electron-builder:
+      # "empty password…" + "<repo path> not a file"
       - name: Build, sign, notarize, publish macOS
-        run: npx electron-builder --mac --publish always
+        run: |
+          if [ -z "${CSC_LINK:-}" ]; then
+            unset CSC_LINK CSC_KEY_PASSWORD
+            echo "MAC_CSC_* not set — building unsigned"
+          fi
+          if [ -z "${APPLE_ID:-}" ] || [ -z "${APPLE_APP_SPECIFIC_PASSWORD:-}" ] || [ -z "${APPLE_TEAM_ID:-}" ]; then
+            unset APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
+            echo "Apple notarize secrets incomplete — skipping notarization"
+          fi
+          npx electron-builder --mac --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
-          # Skip keychain lookup when unsigned; CSC_LINK still signs when set
           CSC_IDENTITY_AUTO_DISCOVERY: false
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
