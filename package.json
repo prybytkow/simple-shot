@@ -99,6 +99,8 @@
     "linux": {
       "icon": "build/icons",
       "category": "Graphics",
+      "desktopName": "simple-shot",
+      "syncDesktopName": true,
       "target": [
         "AppImage",
         "deb"
@@ -111,6 +113,7 @@
       }
     }
   },
+  "desktopName": "simple-shot",
   "devDependencies": {
     "@types/node": "^26.6.3",
     "@types/ssh2-sftp-client": "^9.0.6",
@@ -129,7 +132,10 @@
     "sharp": "^0.35.5",
     "ssh2-sftp-client": "^12.1.1"
   },
-  "author": "Aliaksei Prybytkou",
+  "author": {
+    "name": "Aliaksei Prybytkou",
+    "email": "prybytkow@gmail.com"
+  },
   "license": "MIT",
   "description": "Simple Shot — screen capture and upload"
 }
