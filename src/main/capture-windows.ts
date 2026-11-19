@@ -31,7 +31,8 @@ import {
   setLastFixedMode,
   setPendingHistorySource,
   hideOverlaysForCapture,
-  isCaptureSessionOpen
+  isCaptureSessionOpen,
+  isCaptureOverlayOpen
 } from './capture-session';
 import { captureScreenshot, captureWindowSource } from './capture-platform';
 import { getLangTranslations, showCaptureErrorNotification } from './save-or-upload';
@@ -49,21 +50,29 @@ export function finishCountdown(ok: boolean): void {
   if (r) r(ok);
 }
 
+/** Cancel an in-progress countdown if any (safe no-op otherwise). */
+export function cancelCountdownIfAny(): void {
+  if (getCountdownResolve() || getCountdownWindow()) {
+    finishCountdown(false);
+  }
+}
+
 export function runCountdown(seconds: number): Promise<boolean> {
-  closeCountdownWindow();
+  // Drop any stale countdown UI left after a failed cancel/IPC
+  cancelCountdownIfAny();
+
   const { t } = getLangTranslations();
   const hint = t.capture_countdownHint || 'Click or press ESC to cancel';
+  // Full-screen click shield on the primary display so “click anywhere” cancels
   const primary = screen.getPrimaryDisplay();
-  const w = 220;
-  const h = 160;
-  const x = Math.round(primary.workArea.x + (primary.workArea.width - w) / 2);
-  const y = Math.round(primary.workArea.y + (primary.workArea.height - h) / 2);
+  const { x, y, width, height } = primary.bounds;
+  const secs = Math.max(1, Math.floor(seconds));
 
   return new Promise((resolve) => {
     setCountdownResolve(resolve);
     const win = new BrowserWindow({
-      width: w,
-      height: h,
+      width,
+      height,
       x,
       y,
       frame: false,
@@ -73,32 +82,20 @@ export function runCountdown(seconds: number): Promise<boolean> {
       resizable: false,
       movable: false,
       focusable: true,
+      hasShadow: false,
       webPreferences: secureWebPreferences()
     });
     setCountdownWindow(win);
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-body{margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;
-font-family:Segoe UI,system-ui,sans-serif;background:rgba(20,20,24,.88);color:#fff;border-radius:16px;
-user-select:none;cursor:pointer;-webkit-app-region:no-drag}
-#n{font-size:64px;font-weight:700;line-height:1}
-#h{font-size:12px;opacity:.75;margin-top:10px;text-align:center;padding:0 12px}
-</style></head><body>
-<div id="n">${Math.max(1, Math.floor(seconds))}</div>
-<div id="h">${hint.replace(/</g, '&lt;')}</div>
-<script>
-const api=window.simpleShot;
-let left=${Math.max(1, Math.floor(seconds))};
-const el=document.getElementById('n');
-document.body.addEventListener('click',()=>api.send('countdown-cancel'));
-window.addEventListener('keydown',e=>{if(e.key==='Escape')api.send('countdown-cancel');});
-const t=setInterval(()=>{
-  left--;
-  if(left<=0){clearInterval(t);api.send('countdown-done');return;}
-  el.textContent=String(left);
-},1000);
-</script></body></html>`;
-    win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+    win.loadFile(path.join(__dirname, '../renderer/countdown.html'), {
+      query: {
+        seconds: String(secs),
+        hint
+      }
+    });
     win.setAlwaysOnTop(true, 'screen-saver');
+    win.setIgnoreMouseEvents(false);
+    win.focus();
+
     win.on('closed', () => {
       if (getCountdownWindow() === win) setCountdownWindow(null);
       const countdownResolve = getCountdownResolve();
@@ -107,12 +104,40 @@ const t=setInterval(()=>{
         countdownResolve(false);
       }
     });
+
+    // Main-process fallbacks if renderer IPC fails
     win.webContents.on('before-input-event', (event, input) => {
       if (input.key === 'Escape' && input.type === 'keyDown') {
         event.preventDefault();
         finishCountdown(false);
       }
     });
+    win.on('blur', () => {
+      // Click went to another display/window — treat as cancel
+      if (getCountdownWindow() === win && getCountdownResolve()) {
+        finishCountdown(false);
+      }
+    });
+
+    // Windows: cancel on any mouse-down in this HWND (does not depend on preload/IPC)
+    if (process.platform === 'win32') {
+      const WM_LBUTTONDOWN = 0x0201;
+      const WM_RBUTTONDOWN = 0x0204;
+      try {
+        win.hookWindowMessage(WM_LBUTTONDOWN, () => {
+          if (getCountdownWindow() === win && getCountdownResolve()) {
+            setImmediate(() => finishCountdown(false));
+          }
+        });
+        win.hookWindowMessage(WM_RBUTTONDOWN, () => {
+          if (getCountdownWindow() === win && getCountdownResolve()) {
+            setImmediate(() => finishCountdown(false));
+          }
+        });
+      } catch (e) {
+        console.warn('[countdown] hookWindowMessage failed', e);
+      }
+    }
   });
 }
 
@@ -467,8 +492,23 @@ export function setupScreenCapture(options?: SetupScreenCaptureOptions): void {
   const mode: CaptureMode = options?.mode ?? capture.defaultMode;
   const delay = typeof options?.delaySeconds === 'number' ? options.delaySeconds : undefined;
 
+  // A leftover countdown used to block every later hotkey/tray click forever.
+  // Re-triggering capture cancels the countdown and starts fresh.
+  if (getCountdownWindow() || getCountdownResolve()) {
+    const onlyCountdown =
+      !isCaptureOverlayOpen() &&
+      !(getWindowPickerWindow() && !getWindowPickerWindow()!.isDestroyed()) &&
+      !(getFixedAnnotateWindow() && !getFixedAnnotateWindow()!.isDestroyed());
+    if (onlyCountdown) {
+      cancelCountdownIfAny();
+    } else if (isCaptureSessionOpen()) {
+      return;
+    }
+  } else if (isCaptureSessionOpen()) {
+    return;
+  }
+
   if (typeof delay === 'number' && delay > 0) {
-    if (isCaptureSessionOpen()) return;
     void runCountdown(delay).then((ok) => {
       if (ok) startCaptureMode(mode);
     });

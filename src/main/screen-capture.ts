@@ -8,6 +8,7 @@ import {
   setupScreenCapture,
   openFixedAnnotation,
   openHistoryReedit,
+  cancelCountdownIfAny,
   type SetupScreenCaptureOptions
 } from './capture-windows';
 import { registerCaptureIpc } from './capture-ipc';
@@ -21,7 +22,8 @@ export {
   openFixedAnnotation,
   openHistoryReedit,
   setupScreenCapture,
-  closeAllCaptureWindows
+  closeAllCaptureWindows,
+  cancelCountdownIfAny
 };
 
 registerCaptureIpc();

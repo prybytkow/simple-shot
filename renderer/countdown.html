@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Countdown</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      cursor: pointer;
+      user-select: none;
+      -webkit-app-region: no-drag;
+      font-family: Segoe UI, system-ui, sans-serif;
+    }
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      /* Slight dim so clicks are caught everywhere, including “empty” screen */
+      background: rgba(0, 0, 0, 0.18);
+    }
+    #card {
+      width: 220px;
+      height: 160px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(20, 20, 24, 0.92);
+      color: #fff;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+      pointer-events: none;
+    }
+    #n { font-size: 64px; font-weight: 700; line-height: 1; }
+    #h {
+      font-size: 12px;
+      opacity: 0.75;
+      margin-top: 10px;
+      text-align: center;
+      padding: 0 12px;
+    }
+  </style>
+</head>
+<body>
+  <div id="card">
+    <div id="n">3</div>
+    <div id="h">Click or press ESC to cancel</div>
+  </div>
+  <script>
+    const api = window.simpleShot;
+    const params = new URLSearchParams(window.location.search);
+    let left = Math.max(1, parseInt(params.get('seconds'), 10) || 3);
+    const hint = params.get('hint') || 'Click or press ESC to cancel';
+    const el = document.getElementById('n');
+    const hintEl = document.getElementById('h');
+    el.textContent = String(left);
+    hintEl.textContent = hint;
+
+    let finished = false;
+    function cancel() {
+      if (finished) return;
+      finished = true;
+      clearInterval(timer);
+      if (api && api.send) api.send('countdown-cancel');
+    }
+    function done() {
+      if (finished) return;
+      finished = true;
+      if (api && api.send) api.send('countdown-done');
+    }
+
+    // Any click on the dimmed screen (or the card) cancels
+    document.addEventListener('mousedown', cancel, true);
+    document.addEventListener('click', cancel, true);
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') cancel();
+    });
+
+    const timer = setInterval(() => {
+      left -= 1;
+      if (left <= 0) {
+        clearInterval(timer);
+        done();
+        return;
+      }
+      el.textContent = String(left);
+    }, 1000);
+  </script>
+</body>
+</html>

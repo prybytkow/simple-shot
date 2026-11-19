@@ -1,13 +1,20 @@
 import { app, BrowserWindow, Tray, Menu, ipcMain, MenuItemConstructorOptions } from 'electron';
 import * as path from 'path';
-import { setupScreenCapture, isCaptureSessionOpen, openHistoryReedit } from './screen-capture';
+import {
+  setupScreenCapture,
+  isCaptureSessionOpen,
+  isCaptureOverlayOpen,
+  openHistoryReedit,
+  cancelCountdownIfAny
+} from './screen-capture';
 import { resolveLanguage, getTranslations } from './i18n';
 import {
   loadAppSettings,
   getCaptureSettings,
   setActiveProfile,
   getActiveProfile,
-  needsLegacyVaultUnlock
+  needsLegacyVaultUnlock,
+  isVaultLockedBlocking
 } from './settings-store';
 import {
   setHotkeyHandlers,
@@ -63,6 +70,13 @@ function getResolvedLang(): string {
   return resolveLanguage(settings.language || 'system', app.getLocale());
 }
 
+/** Allow re-trigger during countdown (cancels + restarts); block only if overlay/picker is up. */
+function canStartCapture(): boolean {
+  if (isCaptureOverlayOpen()) return false;
+  cancelCountdownIfAny();
+  return !isCaptureSessionOpen();
+}
+
 export function buildTrayMenu(): void {
   const t = getTranslations(getResolvedLang() as any);
   const appSettings = loadAppSettings();
@@ -79,7 +93,7 @@ export function buildTrayMenu(): void {
     }));
 
   const trayCapture = (fn: () => void) => () => {
-    if (isCaptureSessionOpen()) return;
+    if (!canStartCapture()) return;
     fn();
   };
 
@@ -232,6 +246,10 @@ function createSettingsWindow(): void {
   settingsWindow.on('closed', () => {
     settingsWindow = null;
   });
+  // Profiles live inside the vault — prompt unlock when settings open locked
+  if (needsLegacyVaultUnlock() || isVaultLockedBlocking()) {
+    showUnlockWindow('unlock');
+  }
 }
 
 function createHistoryWindow(): void {
@@ -318,7 +336,7 @@ app.whenReady().then(() => {
   buildTrayMenu();
 
   tray.on('click', () => {
-    if (isCaptureSessionOpen()) return;
+    if (!canStartCapture()) return;
     const cap = getCaptureSettings();
     setupScreenCapture({
       mode: cap.defaultMode,
@@ -335,7 +353,7 @@ app.whenReady().then(() => {
   });
 
   const guardCapture = (fn: () => void) => () => {
-    if (isCaptureSessionOpen()) return;
+    if (!canStartCapture()) return;
     fn();
   };
 

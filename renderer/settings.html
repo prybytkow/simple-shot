@@ -174,14 +174,56 @@
             padding-top: 4px;
         }
         .method-section.active { display: block; }
-        .profiles-bar {
+        .profiles-tabs-wrap {
             display: flex;
-            gap: 8px;
             align-items: center;
-            margin-bottom: 12px;
+            gap: 8px;
+            margin-bottom: 14px;
             flex-wrap: wrap;
         }
-        .profiles-bar select { flex: 1; min-width: 160px; }
+        .profiles-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            flex: 1;
+            min-width: 0;
+        }
+        .profile-tab {
+            appearance: none;
+            border: 1px solid var(--border);
+            background: #fff;
+            color: var(--text);
+            padding: 7px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 550;
+            cursor: pointer;
+            max-width: 180px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .profile-tab:hover { background: #f8fafc; }
+        .profile-tab.active {
+            border-color: var(--accent);
+            background: rgba(15, 118, 110, 0.08);
+            color: var(--accent);
+        }
+        .profile-tab.is-default::after {
+            content: ' ★';
+            font-weight: 700;
+        }
+        .profiles-tab-actions {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .profile-tab-add {
+            min-width: 32px;
+            font-size: 16px;
+            line-height: 1;
+            padding: 6px 10px;
+        }
         .footer {
             flex-shrink: 0;
             display: flex;
@@ -461,11 +503,13 @@
                         </div>
                         <div class="card">
                             <div class="card-title" data-i18n="settings_profilesTitle">Upload profiles</div>
-                            <div class="profiles-bar">
-                                <select id="profile-select"></select>
-                                <button type="button" class="btn-secondary btn-small" id="profile-new-btn" data-i18n="settings_profileNew">New</button>
-                                <button type="button" class="btn-secondary btn-small" id="profile-dup-btn" data-i18n="settings_profileDuplicate">Duplicate</button>
-                                <button type="button" class="btn-danger btn-small" id="profile-del-btn" data-i18n="settings_profileDelete">Delete</button>
+                            <div class="profiles-tabs-wrap">
+                                <div class="profiles-tabs" id="profile-tabs" role="tablist"></div>
+                                <div class="profiles-tab-actions">
+                                    <button type="button" class="btn-secondary btn-small profile-tab-add" id="profile-new-btn" data-i18n-title="settings_profileNew" title="New" aria-label="New">+</button>
+                                    <button type="button" class="btn-secondary btn-small" id="profile-dup-btn" data-i18n="settings_profileDuplicate">Duplicate</button>
+                                    <button type="button" class="btn-danger btn-small" id="profile-del-btn" data-i18n="settings_profileDelete">Delete</button>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label for="profile-name" data-i18n="settings_profileName">Profile name</label>
@@ -658,6 +702,8 @@
 
     <script>
         const api = window.simpleShot;
+        // `process` is not available in the renderer (contextIsolation, no nodeIntegration)
+        const IS_MAC = /Mac|iPhone|iPad/i.test(navigator.platform || '');
 
         let t = {};
         let profiles = [];
@@ -706,6 +752,13 @@
                 const k = el.getAttribute('data-i18n');
                 if (t && k && t[k]) el.textContent = t[k];
             });
+            document.querySelectorAll('[data-i18n-title]').forEach((el) => {
+                const k = el.getAttribute('data-i18n-title');
+                if (t && k && t[k]) {
+                    el.title = t[k];
+                    el.setAttribute('aria-label', t[k]);
+                }
+            });
             if (t.settings_title) document.title = t.settings_title;
             renderHotkeys();
         }
@@ -718,7 +771,7 @@
         function formatAccelDisplay(accel) {
             if (!accel) return '—';
             return accel
-                .replace(/CommandOrControl/g, process.platform === 'darwin' ? '⌘' : 'Ctrl')
+                .replace(/CommandOrControl/g, IS_MAC ? '⌘' : 'Ctrl')
                 .replace(/Command/g, '⌘')
                 .replace(/Control/g, 'Ctrl')
                 .replace(/Option/g, '⌥')
@@ -904,16 +957,28 @@
             return t.vault_secretKept || 'Saved (leave blank to keep)';
         }
 
-        function refreshProfileSelect() {
-            const sel = document.getElementById('profile-select');
-            sel.innerHTML = '';
-            profiles.forEach(p => {
-                const opt = document.createElement('option');
-                opt.value = p.id;
-                opt.textContent = p.name + (p.id === activeProfileId ? ' ★' : '');
-                sel.appendChild(opt);
+        function refreshProfileTabs() {
+            const tabs = document.getElementById('profile-tabs');
+            tabs.innerHTML = '';
+            profiles.forEach((p) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'profile-tab'
+                    + (p.id === currentProfileId ? ' active' : '')
+                    + (p.id === activeProfileId ? ' is-default' : '');
+                btn.setAttribute('role', 'tab');
+                btn.setAttribute('aria-selected', p.id === currentProfileId ? 'true' : 'false');
+                btn.dataset.profileId = p.id;
+                btn.textContent = (p.name || 'Profile').trim() || 'Profile';
+                btn.title = p.id === activeProfileId
+                    ? ((p.name || 'Profile') + ' — ' + (t.settings_setActive || 'Active profile for uploads'))
+                    : (p.name || 'Profile');
+                btn.onclick = () => {
+                    if (p.id === currentProfileId) return;
+                    switchProfile(p.id);
+                };
+                tabs.appendChild(btn);
             });
-            if (currentProfileId) sel.value = currentProfileId;
         }
 
         function readFormIntoCurrentProfile() {
@@ -995,7 +1060,7 @@
             document.getElementById('api-key-hint').textContent = secretHint(flags.apiKeySet);
 
             updateVisibleSection();
-            refreshProfileSelect();
+            refreshProfileTabs();
         }
 
         function switchProfile(id) {
@@ -1156,23 +1221,49 @@
             }
         }
 
-        document.getElementById('profile-select').addEventListener('change', (e) => {
-            switchProfile(e.target.value);
+        document.getElementById('profile-name').addEventListener('input', () => {
+            const p = profiles.find((x) => x.id === currentProfileId);
+            if (!p) return;
+            p.name = (document.getElementById('profile-name').value || '').trim() || p.name;
+            refreshProfileTabs();
         });
+        document.getElementById('profile-active').addEventListener('change', () => {
+            if (document.getElementById('profile-active').checked && currentProfileId) {
+                activeProfileId = currentProfileId;
+                refreshProfileTabs();
+            }
+        });
+        function focusProfileName() {
+            const input = document.getElementById('profile-name');
+            if (!input) return;
+            input.focus();
+            input.select();
+        }
+
+        function nextProfileName(base) {
+            const root = (base || t.settings_profileNew || 'New profile').trim() || 'New profile';
+            const taken = new Set(profiles.map((p) => (p.name || '').trim().toLowerCase()));
+            if (!taken.has(root.toLowerCase())) return root;
+            let n = 2;
+            while (taken.has((root + ' ' + n).toLowerCase())) n += 1;
+            return root + ' ' + n;
+        }
+
         document.getElementById('profile-new-btn').onclick = async () => {
             readFormIntoCurrentProfile();
-            const name = prompt(t.settings_profileNamePrompt || 'Profile name', 'New profile');
-            if (name == null) return;
-            const p = await api.invoke('create-empty-profile', name.trim() || 'New profile');
+            const p = await api.invoke('create-empty-profile', nextProfileName());
+            if (!p || !p.id) return;
             profiles.push(p);
             secretDrafts[p.id] = {};
             fillFormFromProfile(p);
+            focusProfileName();
         };
         document.getElementById('profile-dup-btn').onclick = async () => {
             readFormIntoCurrentProfile();
             const src = profiles.find(x => x.id === currentProfileId);
             if (!src) return;
-            const p = await api.invoke('create-empty-profile', (src.name || 'Profile') + ' copy');
+            const p = await api.invoke('create-empty-profile', nextProfileName((src.name || 'Profile') + ' copy'));
+            if (!p || !p.id) return;
             p.saveMethod = src.saveMethod;
             p.baseUrl = src.baseUrl;
             p.showInTray = src.showInTray;
@@ -1183,6 +1274,7 @@
             profiles.push(p);
             secretDrafts[p.id] = {};
             fillFormFromProfile(p);
+            focusProfileName();
         };
         document.getElementById('profile-del-btn').onclick = () => {
             if (profiles.length <= 1) {

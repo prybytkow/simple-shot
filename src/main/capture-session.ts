@@ -113,8 +113,22 @@ export function isCaptureOverlayOpen(): boolean {
 
 /** True while any capture UI is active (overlay, countdown, picker, fixed annotate). */
 export function isCaptureSessionOpen(): boolean {
+  if (countdownWindow && countdownWindow.isDestroyed()) {
+    countdownWindow = null;
+    countdownResolve = null;
+  }
+  if (windowPickerWindow && windowPickerWindow.isDestroyed()) {
+    windowPickerWindow = null;
+  }
+  if (fixedAnnotateWindow && fixedAnnotateWindow.isDestroyed()) {
+    fixedAnnotateWindow = null;
+  }
+  // Drop destroyed overlays so a stale list cannot block new captures
+  overlayWindows = overlayWindows.filter((w) => !w.isDestroyed());
+
   if (isCaptureOverlayOpen()) return true;
-  if (countdownWindow && !countdownWindow.isDestroyed() && countdownWindow.isVisible()) return true;
+  if (countdownWindow && !countdownWindow.isDestroyed()) return true;
+  if (countdownResolve) return true;
   if (windowPickerWindow && !windowPickerWindow.isDestroyed()) return true;
   if (fixedAnnotateWindow && !fixedAnnotateWindow.isDestroyed()) return true;
   return false;

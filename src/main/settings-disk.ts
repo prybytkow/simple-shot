@@ -125,23 +125,21 @@ export function writeDisk(vault: VaultBlob | null): void {
   const capture = normalizeCapture(session.cached?.capture);
   const updates = normalizeUpdates(session.cached?.updates);
   const exportSettings = normalizeExport(session.cached?.export);
-  const ts = ensureInstallTimestamp();
-  fs.writeFileSync(
-    settingsPath(),
-    JSON.stringify(
-      {
-        installTimestamp: ts,
-        vault,
-        hotkeys,
-        capture,
-        updates,
-        export: exportSettings
-      },
-      null,
-      2
-    ),
-    'utf8'
-  );
+  // Never invent installTimestamp while the vault is still locked — that would
+  // stamp a new key on disk without re-encrypting, then hide the legacy unlock UI.
+  const payload: Record<string, unknown> = {
+    vault,
+    hotkeys,
+    capture,
+    updates,
+    export: exportSettings
+  };
+  if (session.installTimestamp != null && Number.isFinite(session.installTimestamp)) {
+    payload.installTimestamp = session.installTimestamp;
+  } else if (!session.vaultLocked) {
+    payload.installTimestamp = ensureInstallTimestamp();
+  }
+  fs.writeFileSync(settingsPath(), JSON.stringify(payload, null, 2), 'utf8');
 }
 
 /** First run or empty disk: create session.installTimestamp and an encrypted empty vault. */
@@ -259,7 +257,8 @@ export function loadAppSettings(): AppSettings {
         return session.cached!;
       }
       session.vaultLocked = true;
-      session.legacyNeedsUserUnlock = diskTs == null;
+      // Offer master-password unlock whenever auto-unlock failed (missing or wrong timestamp)
+      session.legacyNeedsUserUnlock = true;
       session.unlockedSecrets = null;
       session.encryptionPasswordSession = null;
       session.cached = lockedShell(vault, diskHotkeys, diskCapture, diskUpdates, diskExport);
@@ -272,7 +271,7 @@ export function loadAppSettings(): AppSettings {
       }
       // No timestamp (legacy master-password vault) or wrong key — wait for user unlock once
       session.vaultLocked = true;
-      session.legacyNeedsUserUnlock = diskTs == null;
+      session.legacyNeedsUserUnlock = true;
       session.unlockedSecrets = null;
       session.encryptionPasswordSession = null;
       session.cached = lockedShell(vault, diskHotkeys, diskCapture, diskUpdates, diskExport);
