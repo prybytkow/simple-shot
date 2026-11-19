@@ -11,7 +11,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"/></a>
   <a href="https://www.electronjs.org/"><img src="https://img.shields.io/badge/Electron-44-47848F?logo=electron" alt="Electron"/></a>
-  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-18+-339933?logo=node.js" alt="Node.js 18+"/></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-22+-339933?logo=node.js" alt="Node.js 22+"/></a>
   <a href="https://github.com/prybytkow/simple-shot/releases/latest"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey" alt="Platform"/></a>
   <a href="https://github.com/prybytkow/simple-shot/releases/latest"><img src="https://img.shields.io/github/v/release/prybytkow/simple-shot?label=latest%20release" alt="Latest release"/></a>
 </p>
@@ -121,7 +121,7 @@
 
 | Requirement | Version |
 |-------------|---------|
-| **Node.js** | 18+ (LTS recommended) |
+| **Node.js** | 22.12+ (required by Electron 44) |
 | **Package manager** | npm or yarn |
 | **OS** | Windows, macOS, or Linux (Electron-supported) |
 
