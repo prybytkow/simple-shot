@@ -99,7 +99,6 @@
     "linux": {
       "icon": "build/icons",
       "category": "Graphics",
-      "desktopName": "simple-shot",
       "syncDesktopName": true,
       "target": [
         "AppImage",
