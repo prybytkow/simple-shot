@@ -70,7 +70,14 @@ export async function captureScreenshot(areaData: any, sourceDisplayId?: number)
     }
   }
 
-  return captureScreenshotDesktopCapturer(areaData, targetDisplay);
+  // macOS (and any other desktopCapturer path): hide overlays so they are not in the frame
+  // and so a subsequent clipboard write is not racing a fullscreen always-on-top window.
+  await hideOverlaysForCapture();
+  try {
+    return await captureScreenshotDesktopCapturer(areaData, targetDisplay);
+  } finally {
+    await restoreOverlaysAfterCapture();
+  }
 }
 
 export async function captureScreenshotDesktopCapturer(

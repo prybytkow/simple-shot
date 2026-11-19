@@ -303,6 +303,38 @@ export async function recordExportHistory(opts: {
   }
 }
 
+/**
+ * Write a PNG screenshot to the system clipboard (Electron 44+ ClipboardItem API).
+ * On macOS also publish `public.png` so native apps that ignore Chromium MIME mapping still paste.
+ */
+export async function writeScreenshotToClipboard(pngBuffer: Buffer): Promise<void> {
+  const img = nativeImage.createFromBuffer(pngBuffer);
+  if (img.isEmpty()) {
+    throw new Error('Clipboard image is empty');
+  }
+  const png = img.toPNG();
+  if (!png || png.length < 8) {
+    throw new Error('Clipboard PNG encode failed');
+  }
+  // Uint8Array copy: Buffer is not always accepted as BlobPart under strict TS DOM libs.
+  const pngBytes = Uint8Array.from(png);
+  const pngBlob = new Blob([pngBytes], { type: 'image/png' });
+  const items: Record<string, Blob> = {
+    'image/png': pngBlob
+  };
+  // Darwin pasteboard: some apps (Notes, older Cocoa) prefer the UTI over image/png alone.
+  if (process.platform === 'darwin') {
+    items['electron application/osclipboard;format="public.png"'] = new Blob([pngBytes], {
+      type: 'image/png'
+    });
+  }
+  await clipboard.write([new ClipboardItem(items)]);
+  const hasPng = await clipboard.has('image/png');
+  if (!hasPng) {
+    throw new Error('Clipboard write did not stick (image/png missing)');
+  }
+}
+
 export async function prepareExport(
   pngBuffer: Buffer,
   mode: CaptureMode
@@ -344,12 +376,7 @@ export async function saveOrUploadScreenshot(
   const overlayWindows = getOverlayWindows();
 
   if (destination === 'clipboard') {
-    const png = nativeImage.createFromBuffer(pngLossless).toPNG();
-    await clipboard.write([
-      new ClipboardItem({
-        'image/png': new Blob([new Uint8Array(png)], { type: 'image/png' })
-      })
-    ]);
+    await writeScreenshotToClipboard(pngLossless);
     await recordExportHistory({
       pngLossless,
       method: 'clipboard',
@@ -424,7 +451,7 @@ export async function saveOrUploadScreenshot(
       return;
     }
     fs.writeFileSync(savePath, buffer);
-    clipboard.writeText(savePath);
+    await clipboard.writeText(savePath);
     await recordExportHistory({
       pngLossless,
       method: 'local',
@@ -457,7 +484,7 @@ export async function saveOrUploadScreenshot(
     return;
   }
   const fullUrl = buildPublicUrl(result, settings, fileName);
-  clipboard.writeText(fullUrl);
+  await clipboard.writeText(fullUrl);
   await recordExportHistory({
     pngLossless,
     method: historyMethodFromSaveMethod(settings.saveMethod),

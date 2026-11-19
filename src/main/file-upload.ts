@@ -259,7 +259,7 @@ export async function startUploadQueue(
   await Promise.all(workers);
 
   if (lastUrl) {
-    clipboard.writeText(lastUrl);
+    await clipboard.writeText(lastUrl);
   }
 
   const appS = loadAppSettings();

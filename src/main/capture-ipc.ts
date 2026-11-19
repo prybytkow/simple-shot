@@ -38,7 +38,9 @@ export function registerCaptureIpc(): void {
   captureIpcRegistered = true;
 
   ipcMain.on('copy-text', (_event, text: string) => {
-    if (typeof text === 'string' && text) clipboard.writeText(text);
+    if (typeof text === 'string' && text) {
+      void clipboard.writeText(text);
+    }
   });
 
   ipcMain.on('countdown-cancel', () => finishCountdown(false));
